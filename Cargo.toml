@@ -1,7 +1,8 @@
 [package]
-name = "kicad-parser"
-version = "0.1.0"
+name = "kicad-parser-rs"
+version = "0.0.1"
 edition = "2024"
+publish =  ["devd"]
 
 [dependencies]
 anyhow = "1.0.98"
