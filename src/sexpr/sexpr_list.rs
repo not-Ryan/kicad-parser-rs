@@ -67,7 +67,7 @@ impl SExprList {
   ///
   /// Returns a `ParserError::UnexpectedSExpr` if the first element is not a symbol or the list is empty.
   ///
-  pub fn peek_name(&mut self) -> Result<&str, ParserError> {
+  pub fn peek_name(&self) -> Result<&str, ParserError> {
     self.peek_name_maybe()?.ok_or_else(|| ParserError {
       expected: "More Symbol".to_string(),
       found: "end of list".to_string(),
@@ -172,7 +172,7 @@ impl SExprList {
   }
 
   pub fn expect_end(&self) -> Result<(), ParserError> {
-    if self.0.len() == 0 {
+    if self.0.is_empty() {
       Ok(())
     } else {
       Err(ParserError {
