@@ -1,12 +1,12 @@
 use crate::{
-  parser::{ParseableFromList, ParserError},
-  sexpr::{SExpr, SExprList, SExprSymbol},
+  expect_eq,
+  parser::{ParserError, TryFromSExpr},
+  sexpr::{SExpr, SExprSymbol},
 };
 
 pub fn parse_pcb_file(input: &str) -> Result<PcbFile, ParserError> {
   let sexprs = crate::sexpr::parse_sexpr(input).map_err(ParserError::SExpressionError)?;
-  let parser = crate::parser::Parser::new(sexprs);
-  PcbFile::parse(parser)
+  sexprs.as_sexpr_into()
 }
 
 #[derive(Default, Debug, Clone)]
@@ -22,39 +22,36 @@ pub struct PcbFile {
   pub nets: Vec<PcbNet>,
 }
 
-impl ParseableFromList for PcbFile {
-  fn parse(mut parser: crate::parser::Parser) -> Result<Self, ParserError> {
+impl TryFromSExpr for PcbFile {
+  const CONTEXT: &'static str = "pcb_file::PcbFile";
+
+  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+    let mut list = value.as_list()?;
+
     let mut pcb_file = PcbFile::default();
+    expect_eq!(list.next_symbol()?, "kicad_pcb", "PcbFile::try_from");
 
-    parser.next_symbol_is("kicad_pcb")?;
-
-    while let Some(mut parser) = parser.next_parser_maybe()? {
-      match parser.next_symbol()?.as_str() {
+    while let Some(mut list) = list.next_maybe_list()? {
+      match list.peek_name()? {
         "version" => {
-          let version: f64 = parser.next_expect()?;
+          let version: f64 = list.discard(1)?.next_into()?;
           pcb_file.version = (version as u64).to_string();
         }
 
-        "generator" => pcb_file.generator = parser.next_expect()?,
-        "generator_version" => pcb_file.generator_version = parser.next_expect()?,
-        "paper" => pcb_file.paper = parser.next_expect()?,
+        "generator" => pcb_file.generator = list.discard(1)?.next_into()?,
+        "generator_version" => pcb_file.generator_version = list.discard(1)?.next_into()?,
+        "paper" => pcb_file.paper = list.discard(1)?.next_into()?,
 
-        "general" => pcb_file.general = parser.next_parse()?,
-        "layers" => pcb_file.layers = parser.next_parse_vec()?,
-        "net" => {
-          pcb_file.nets.push(PcbNet {
-            ordinal: parser.next_expect_u32()?,
-            name: parser.next_expect()?,
-          });
+        "general" => pcb_file.general = list.as_sexpr_into()?,
+        "layers" => pcb_file.layers = list.as_sexpr_into()?,
+        "net" => pcb_file.nets.push(list.as_sexpr_into()?),
+
+        _other => {
+          // TODO: Maybe log?
+          // list.error_unexpected("named list", format!("unknown name: {name}")),
         }
-
-        name => parser.error_unexpected("named list", format!("unknown name: {name}")),
       }
-
-      // parser.expect_end()?;
     }
-
-    // let while
 
     Ok(pcb_file)
   }
@@ -72,22 +69,43 @@ pub struct PcbNet {
   pub name: String,
 }
 
+impl TryFromSExpr for PcbNet {
+  const CONTEXT: &'static str = "pcb_file::PcbNet";
+
+  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+    let mut list = value.as_list()?;
+    let mut net = PcbNet::default();
+
+    expect_eq!(list.next_symbol()?, "net", "PcbNet::try_from");
+    net.ordinal = list.next_into()?;
+    net.name = list.next_into()?;
+
+    Ok(net)
+  }
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct PcbFileGeneral {
   /// The thickness token attribute defines the overall board thickness.
   pub thickness: f64,
 }
 
-impl ParseableFromList for PcbFileGeneral {
-  fn parse(mut parser: crate::parser::Parser) -> Result<Self, ParserError> {
+impl TryFromSExpr for PcbFileGeneral {
+  const CONTEXT: &'static str = "pcb_file::PcbFileGeneral";
+
+  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+    let mut list = value.as_list()?;
     let mut general = PcbFileGeneral::default();
 
-    while let Some(SExpr::List(list)) = parser.next_maybe() {
-      let mut parser = list.into_parser();
+    expect_eq!(list.next_symbol()?, "general", "PcbFileGeneral::try_from");
 
-      match parser.next_symbol()?.as_str() {
-        "thickness" => general.thickness = parser.next_expect()?,
-        name => parser.error_unexpected("named list", format!("unknown name: {name}")),
+    while let Some(mut list) = list.next_maybe_list()? {
+      match list.next_symbol()?.as_str() {
+        "thickness" => general.thickness = list.next_into()?,
+        _name => {
+          // TODO: Maybe log?
+          // list.error_unexpected("named list", format!("unknown name: {name}")),
+        }
       }
     }
 
@@ -107,29 +125,24 @@ pub struct PcbLayer {
   pub user_name: Option<String>,
 }
 
-impl ParseableFromList for PcbLayer {
-  fn parse(mut parser: crate::parser::Parser) -> Result<Self, ParserError> {
-    let mut layer = PcbLayer::default();
+impl TryFromSExpr for Vec<PcbLayer> {
+  type Error = ParserError;
 
-    let id: f64 = parser.next_expect()?;
-    layer.ordinal = id as u32;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut out = Self::new();
+    expect_eq!(list.next_symbol()?, "layers", "PcbLayer::try_from");
 
-    layer.name = parser.next_expect()?;
-    layer.layer_type = {
-      let layer_name: SExprSymbol = parser.next_expect()?;
-      match layer_name.0.as_str() {
-        "user" => PcbLayerType::User,
-        "jumper" => PcbLayerType::Jumper,
-        "mixed" => PcbLayerType::Mixed,
-        "power" => PcbLayerType::Power,
-        "signal" => PcbLayerType::Signal,
-        _ => panic!("Unknown layer type: {}", layer_name.0),
-      }
-    };
+    while let Some(mut layer_list) = list.next_maybe_list()? {
+      let mut layer = PcbLayer::default();
+      layer.ordinal = layer_list.next_into()?;
+      layer.name = layer_list.next_into()?;
+      layer.layer_type = layer_list.next_into()?;
+      layer.user_name = list.next_maybe_into()?;
+      out.push(layer);
+    }
 
-    layer.user_name = parser.next_expect_maybe()?;
-
-    Ok(layer)
+    Ok(out)
   }
 }
 
@@ -141,6 +154,26 @@ pub enum PcbLayerType {
   Mixed,
   Power,
   Signal,
+}
+
+impl TryFromSExpr for PcbLayerType {
+  const CONTEXT: &'static str = "pcb_file::PcbLayerType";
+
+  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+    let symbol: SExprSymbol = value.try_into()?;
+    match symbol.0.as_str() {
+      "user" => Ok(PcbLayerType::User),
+      "jumper" => Ok(PcbLayerType::Jumper),
+      "mixed" => Ok(PcbLayerType::Mixed),
+      "power" => Ok(PcbLayerType::Power),
+      "signal" => Ok(PcbLayerType::Signal),
+
+      _ => Err(ParserError::unexpected(
+        "valid layer type",
+        format!("{}", symbol.0,
+      )),
+    }
+  }
 }
 
 // TODO: Implement `layer_stackup` using https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html#_stack_up_layer_settings
