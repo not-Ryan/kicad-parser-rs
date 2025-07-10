@@ -142,6 +142,8 @@ pub struct FootprintAttributes {
   pub exclude_from_pos_files: bool,
   /// Exclude from bill of materials
   pub exclude_from_bom: bool,
+  /// Do not populate this footprint in the BOM
+  pub do_not_populate: bool,
 }
 
 impl TryFrom<SExpr> for FootprintAttributes {
@@ -159,6 +161,7 @@ impl TryFrom<SExpr> for FootprintAttributes {
         "board_only" => attributes.board_only = true,
         "exclude_from_pos_files" => attributes.exclude_from_pos_files = true,
         "exclude_from_bom" => attributes.exclude_from_bom = true,
+        "dnp" | "do_not_populate" => attributes.do_not_populate = true,
         name => crate::catch_all!(name),
       }
     }
