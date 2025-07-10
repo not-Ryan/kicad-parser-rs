@@ -1,46 +1,11 @@
-//! # KiCad Footprint Parser
-//!
-//! This module provides Rust structs for parsing and representing KiCad footprints
-//! and their associated graphics, pads, and other elements.
-//!
-//! ## Key Structures
-//!
-//! - [`Footprint`]: The main footprint container
-//! - [`Pad`]: Individual footprint pads
-//! - [`FootprintGraphic`]: Graphics elements (text, lines, shapes, etc.)
-//! - [`Position`]: X/Y coordinates with optional rotation
-//! - [`Layer`]: KiCad canonical layer names
-//!
-//! ## Example Usage
-//!
-//! ```rust
-//! use kicad_parser::common::*;
-//!
-//! // Create a simple SMD footprint
-//! let mut footprint = Footprint::new(Layer::FSilkS);
-//! footprint.description = Some("Simple SMD footprint".to_string());
-//!
-//! // Add an SMD pad
-//! let pad = Pad::new_smd(
-//!     "1".to_string(),
-//!     PadShape::Rectangle,
-//!     Position::new(0.0, 0.0),
-//!     (1.0, 0.5),  // 1mm x 0.5mm
-//!     vec![Layer::FCu, Layer::FPaste, Layer::FMask]
-//! );
-//! footprint.add_pad(pad);
-//! ```
-//!
-//! ## S-Expression Format Compliance
-//!
-//! These structures are designed to match the KiCad s-expression file format
-//! as documented in the KiCad file format specification. All coordinate values
-//! are in millimeters, and angles are in degrees.
-
-use crate::{expect_eq, parser::ParserError, sexpr::SExpr};
+use crate::{
+  expect_eq,
+  parser::ParserError,
+  sexpr::{SExpr, SExprSymbol, SExprValue},
+};
 
 /// Position identifier defining X/Y coordinates and optional rotation angle
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Position {
   /// X coordinate in millimeters
   pub x: f64,
@@ -66,7 +31,7 @@ impl TryFrom<SExpr> for Position {
 }
 
 /// Coordinate point for use in point lists
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Point {
   /// X coordinate in millimeters
   pub x: f64,
@@ -74,26 +39,122 @@ pub struct Point {
   pub y: f64,
 }
 
+impl TryFrom<SExpr> for Point {
+  type Error = ParserError;
+
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let _name = list.next_symbol()?;
+
+    let x: f64 = list.next_into()?;
+    let y: f64 = list.next_into()?;
+    list.expect_end()?;
+
+    Ok(Point { x, y })
+  }
+}
+
+/// Coordinate point for use in point lists
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct PointList(Vec<Point>);
+
+impl TryFrom<SExpr> for PointList {
+  type Error = ParserError;
+
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "pts", "Point::try_from");
+
+    let mut out = PointList::default();
+    while let Some(mut pt) = list.next_maybe_list()? {
+      expect_eq!(pt.peek_name()?, "xy", "PointList::try_from");
+      let pt: Point = pt.as_sexpr_into()?;
+      out.0.push(pt);
+    }
+
+    Ok(out)
+  }
+}
+
 /// Stroke definition for drawing outlines
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Stroke {
   /// Line width
   pub width: f64,
   /// Line style type
   pub line_type: StrokeType,
   /// Optional color (R, G, B, A)
-  pub color: Option<(u8, u8, u8, u8)>,
+  pub color: Option<RgbaColor>,
+}
+
+impl TryFrom<SExpr> for Stroke {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut stroke = Self::default();
+    expect_eq!(list.next_symbol()?, "stroke", "Stroke::try_from");
+
+    while let Some(mut list) = list.next_maybe_list()? {
+      match list.peek_name()? {
+        "width" => stroke.width = list.discard(1)?.next_into()?,
+        "type" => stroke.line_type = list.as_sexpr_into()?,
+        "color" => stroke.color = Some(list.as_sexpr_into()?),
+
+        _ => {
+          // Maybe log unknown attribute?
+        }
+      }
+    }
+
+    Ok(stroke)
+  }
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct RgbaColor(u8, u8, u8, u8);
+
+impl TryFrom<SExpr> for RgbaColor {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "color", "Color::try_from");
+    let r: u8 = list.next_into()?;
+    let g: u8 = list.next_into()?;
+    let b: u8 = list.next_into()?;
+    let a: u8 = list.next_into()?;
+    list.expect_end()?;
+    Ok(Self(r, g, b, a))
+  }
 }
 
 /// Valid stroke line styles
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum StrokeType {
+  #[default]
+  Default,
+  Solid,
   Dash,
   DashDot,
   DashDotDot,
   Dot,
-  Default,
-  Solid,
+}
+
+impl TryFrom<SExpr> for StrokeType {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "type", "StrokeType::try_from");
+
+    Ok(match list.next_symbol()?.as_str() {
+      "dash" => Self::Dash,
+      "dash_dot" => Self::DashDot,
+      "dash_dot_dot" => Self::DashDotDot,
+      "dot" => Self::Dot,
+      "default" => Self::Default,
+      "solid" => Self::Solid,
+      s => crate::error!("Valid stroke type", s),
+    })
+  }
 }
 
 /// Text effects for controlling text display
@@ -259,7 +320,9 @@ impl TryFrom<SExpr> for Layer {
     let mut list = value.as_list()?;
     expect_eq!(list.next_symbol()?, "layer", "Layer::try_from");
 
-    let layer = match list.next_symbol()?.as_str() {
+    let value: SExprValue = list.next_into()?;
+
+    let layer = match value.as_str() {
       "F.Cu" => Layer::FCu,
       "B.Cu" => Layer::BCu,
       "In1.Cu" => Layer::In1Cu,
@@ -339,10 +402,10 @@ pub enum ZoneConnect {
 }
 
 /// Footprint attributes
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintAttributes {
   /// Footprint type (SMD or through-hole)
-  pub footprint_type: Option<FootprintType>,
+  pub footprint_type: FootprintType,
   /// Board-only flag (no schematic symbol reference)
   pub board_only: bool,
   /// Exclude from position files
@@ -351,9 +414,33 @@ pub struct FootprintAttributes {
   pub exclude_from_bom: bool,
 }
 
+impl TryFrom<SExpr> for FootprintAttributes {
+  type Error = ParserError;
+
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "attr", "FootprintAttributes::try_from");
+
+    let mut attributes = Self::default();
+    while let Some(next) = list.next_maybe_symbol()? {
+      match next.as_str() {
+        "smd" => attributes.footprint_type = FootprintType::Smd,
+        "through_hole" => attributes.footprint_type = FootprintType::ThroughHole,
+        "board_only" => attributes.board_only = true,
+        "exclude_from_pos_files" => attributes.exclude_from_pos_files = true,
+        "exclude_from_bom" => attributes.exclude_from_bom = true,
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(attributes)
+  }
+}
+
 /// Footprint type classification
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum FootprintType {
+  #[default]
   Smd,
   ThroughHole,
 }
@@ -450,20 +537,22 @@ impl TryFrom<SExpr> for Footprint {
         SExpr::List(mut list) => match list.peek_name()? {
           "uuid" => footprint.uuid = Some(list.as_sexpr_into()?),
           "layer" => footprint.layer = list.as_sexpr_into()?,
-
+          // TEDIT?
           "at" => footprint.position = Some(list.as_sexpr_into()?),
+          "description" => footprint.description = Some(list.discard(1)?.next_into()?),
+          "tags" => footprint.tags = Some(list.discard(1)?.next_into()?),
           "path" => footprint.path = Some(list.discard(1)?.next_into()?),
 
           // TODO: Where do these go?
           // "sheetname" => footprint.name = Some(list.discard(1)?.next_into()?),
           // "sheetfile" => footprint.sheetfile = Some(list.discard(1)?.next_into()?),
-          // "attr" => footprint.attr = attr(list.discard(1)?.next_into()?),
-          name => {
-            // TODO: Unknown list name. Maybe log?
-          }
-        },
+          "attr" => footprint.attributes = Some(list.as_sexpr_into()?),
 
-        _ => {}
+          name if name.starts_with("fp_") => footprint.graphics.push(list.as_sexpr_into()?),
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
       }
     }
 
@@ -484,8 +573,28 @@ pub enum FootprintGraphic {
   Curve(FootprintCurve),
 }
 
+impl TryFrom<SExpr> for FootprintGraphic {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+
+    match list.peek_name()? {
+      "fp_text" => Ok(FootprintGraphic::Text(list.as_sexpr_into()?)),
+      "fp_text_box" => Ok(FootprintGraphic::TextBox(list.as_sexpr_into()?)),
+      "fp_line" => Ok(FootprintGraphic::Line(list.as_sexpr_into()?)),
+      "fp_rect" => Ok(FootprintGraphic::Rectangle(list.as_sexpr_into()?)),
+      "fp_circle" => Ok(FootprintGraphic::Circle(list.as_sexpr_into()?)),
+      "fp_arc" => Ok(FootprintGraphic::Arc(list.as_sexpr_into()?)),
+      "fp_poly" => Ok(FootprintGraphic::Polygon(list.as_sexpr_into()?)),
+      "fp_curve" => Ok(FootprintGraphic::Curve(list.as_sexpr_into()?)),
+
+      name => crate::error!("Valid footprint graphic type", name),
+    }
+  }
+}
+
 /// Footprint text
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintText {
   /// Text type
   pub text_type: FootprintTextType,
@@ -500,21 +609,59 @@ pub struct FootprintText {
   /// Hidden flag
   pub hide: bool,
   /// Text effects
-  pub effects: TextEffects,
+  /// TODO: Implement TextEffects
+  // pub effects: TextEffects,
   /// Unique identifier
   pub uuid: Uuid,
 }
 
+impl TryFrom<SExpr> for FootprintText {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "fp_text", "FootprintText::try_from");
+
+    let mut text = FootprintText::default();
+
+    while let Some(next) = list.next_maybe() {
+      match next {
+        SExpr::Value(value) => text.text = value.0,
+
+        SExpr::Symbol(symbol) if symbol == "hide" => text.hide = true,
+        SExpr::Symbol(symbol) if symbol == "unlocked" => text.hide = true,
+        SExpr::Symbol(symbol) if symbol == "reference" => {
+          text.text_type = FootprintTextType::Reference
+        }
+        SExpr::Symbol(symbol) if symbol == "value" => text.text_type = FootprintTextType::Value,
+        SExpr::Symbol(symbol) if symbol == "user" => text.text_type = FootprintTextType::User,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "at" => text.position = attr.as_sexpr_into()?,
+          "layer" => text.layer = attr.as_sexpr_into()?,
+          "uuid" => text.uuid = attr.as_sexpr_into()?,
+          // "effects" => ???
+          other => crate::catch_all!(other),
+        },
+
+        other => crate::catch_all!(other),
+      }
+    }
+
+    Ok(text)
+  }
+}
+
 /// Footprint text types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum FootprintTextType {
+  #[default]
   Reference,
   Value,
   User,
 }
 
 /// Footprint text box (from version 7)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintTextBox {
   /// Locked flag
   pub locked: bool,
@@ -525,7 +672,7 @@ pub struct FootprintTextBox {
   /// End position (cardinal orientation)
   pub end: Option<Point>,
   /// Four corner points (non-cardinal orientation)
-  pub points: Option<Vec<Point>>,
+  pub points: PointList,
   /// Rotation angle
   pub angle: Option<f64>,
   /// Layer
@@ -533,13 +680,51 @@ pub struct FootprintTextBox {
   /// Unique identifier
   pub uuid: Uuid,
   /// Text effects
-  pub effects: TextEffects,
+  // pub effects: TextEffects,
   /// Border stroke
   pub stroke: Option<Stroke>,
 }
 
+impl TryFrom<SExpr> for FootprintTextBox {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(
+      list.next_symbol()?,
+      "fp_text_box",
+      "FootprintTextBox::try_from"
+    );
+
+    let mut text = Self::default();
+
+    while let Some(next) = list.next_maybe() {
+      match next {
+        SExpr::Value(value) => text.text = value.0,
+        SExpr::Symbol(symbol) if symbol == "locked" => text.locked = true,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "start" => text.start = Some(attr.as_sexpr_into()?),
+          "end" => text.end = Some(attr.as_sexpr_into()?),
+          "uuid" => text.uuid = attr.as_sexpr_into()?,
+          "layer" => text.layer = attr.as_sexpr_into()?,
+          "angle" => text.angle = attr.discard(1)?.next_maybe_into()?,
+          "stroke" => text.stroke = Some(attr.as_sexpr_into()?),
+          "pts" => text.points = attr.as_sexpr_into()?,
+
+          // "effects" => ???
+          other => crate::catch_all!(other),
+        },
+
+        other => crate::catch_all!(other),
+      }
+    }
+
+    Ok(text)
+  }
+}
+
 /// Footprint line
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintLine {
   /// Start point
   pub start: Point,
@@ -553,15 +738,51 @@ pub struct FootprintLine {
   pub locked: bool,
   /// Unique identifier
   pub uuid: Uuid,
+  /// The width token defines the line width.
+  pub width: f32,
+}
+
+impl TryFrom<SExpr> for FootprintLine {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut line = Self::default();
+
+    expect_eq!(list.next_symbol()?, "fp_line", "FootprintLine::try_from");
+
+    while let Some(attr) = list.next_maybe() {
+      match attr {
+        SExpr::Symbol(s) if s == "locked" => line.locked = false,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "start" => line.start = attr.as_sexpr_into()?,
+          "end" => line.end = attr.as_sexpr_into()?,
+
+          "layer" => line.layer = attr.as_sexpr_into()?,
+          "stroke" => line.stroke = attr.as_sexpr_into()?,
+          "uuid" => line.uuid = attr.as_sexpr_into()?,
+
+          "width" => line.width = attr.discard(1)?.next_into()?,
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(line)
+  }
 }
 
 /// Footprint rectangle
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintRectangle {
   /// Upper left corner
   pub start: Point,
   /// Lower right corner
   pub end: Point,
+  // The width token defines the line width of the rectangle. (prior to version 7)
+  pub width: f32,
   /// Layer
   pub layer: Layer,
   /// Stroke definition
@@ -574,8 +795,40 @@ pub struct FootprintRectangle {
   pub uuid: Uuid,
 }
 
+impl TryFrom<SExpr> for FootprintRectangle {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut line = Self::default();
+
+    expect_eq!(list.next_symbol()?, "fp_rect", "FootprintLine::try_from");
+
+    while let Some(list) = list.next_maybe() {
+      match list {
+        SExpr::Symbol(s) if s == "locked" => line.locked = false,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "start" => line.start = attr.as_sexpr_into()?,
+          "end" => line.end = attr.as_sexpr_into()?,
+
+          "layer" => line.layer = attr.as_sexpr_into()?,
+          "stroke" => line.stroke = attr.as_sexpr_into()?,
+          "uuid" => line.uuid = attr.as_sexpr_into()?,
+          "fill" => line.fill = attr.discard(1)?.next_symbol()? == "yes",
+          "width" => line.width = attr.discard(1)?.next_into()?,
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(line)
+  }
+}
+
 /// Footprint circle
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintCircle {
   /// Center point
   pub center: Point,
@@ -585,6 +838,8 @@ pub struct FootprintCircle {
   pub layer: Layer,
   /// Stroke definition
   pub stroke: Stroke,
+  // The width token defines the line width of the circle. (prior to version 7)
+  pub width: f32,
   /// Fill flag
   pub fill: bool,
   /// Locked flag
@@ -593,8 +848,40 @@ pub struct FootprintCircle {
   pub uuid: Uuid,
 }
 
+impl TryFrom<SExpr> for FootprintCircle {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut line = Self::default();
+
+    expect_eq!(list.next_symbol()?, "fp_circle", "FootprintLine::try_from");
+
+    while let Some(list) = list.next_maybe() {
+      match list {
+        SExpr::Symbol(s) if s == "locked" => line.locked = false,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "center" => line.center = attr.as_sexpr_into()?,
+          "end" => line.end = attr.as_sexpr_into()?,
+
+          "layer" => line.layer = attr.as_sexpr_into()?,
+          "stroke" => line.stroke = attr.as_sexpr_into()?,
+          "uuid" => line.uuid = attr.as_sexpr_into()?,
+          "fill" => line.fill = attr.discard(1)?.next_symbol()? == "yes",
+          "width" => line.width = attr.discard(1)?.next_into()?,
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(line)
+  }
+}
+
 /// Footprint arc
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintArc {
   /// Start position
   pub start: Point,
@@ -604,6 +891,8 @@ pub struct FootprintArc {
   pub end: Point,
   /// Layer
   pub layer: Layer,
+  /// Width of the arc (prior to version 7)
+  pub width: f32,
   /// Stroke definition
   pub stroke: Stroke,
   /// Locked flag
@@ -612,11 +901,43 @@ pub struct FootprintArc {
   pub uuid: Uuid,
 }
 
+impl TryFrom<SExpr> for FootprintArc {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut line = Self::default();
+
+    expect_eq!(list.next_symbol()?, "fp_arc", "FootprintLine::try_from");
+
+    while let Some(list) = list.next_maybe() {
+      match list {
+        SExpr::Symbol(s) if s == "locked" => line.locked = false,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "start" => line.start = attr.as_sexpr_into()?,
+          "mid" => line.mid = attr.as_sexpr_into()?,
+          "end" => line.end = attr.as_sexpr_into()?,
+
+          "layer" => line.layer = attr.as_sexpr_into()?,
+          "stroke" => line.stroke = attr.as_sexpr_into()?,
+          "uuid" => line.uuid = attr.as_sexpr_into()?,
+          "width" => line.width = attr.discard(1)?.next_into()?,
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(line)
+  }
+}
+
 /// Footprint polygon
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintPolygon {
   /// Polygon outline points
-  pub points: Vec<Point>,
+  pub points: PointList,
   /// Layer
   pub layer: Layer,
   /// Stroke definition
@@ -627,25 +948,90 @@ pub struct FootprintPolygon {
   pub locked: bool,
   /// Unique identifier
   pub uuid: Uuid,
+  /// Width of the polygon stroke (prior to version 7)
+  pub width: f32,
+}
+
+impl TryFrom<SExpr> for FootprintPolygon {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut poly = Self::default();
+
+    expect_eq!(list.next_symbol()?, "fp_poly", "FootprintLine::try_from");
+
+    while let Some(list) = list.next_maybe() {
+      match list {
+        SExpr::Symbol(s) if s == "locked" => poly.locked = false,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "pts" => poly.points = attr.as_sexpr_into()?,
+
+          "layer" => poly.layer = attr.as_sexpr_into()?,
+          "stroke" => poly.stroke = attr.as_sexpr_into()?,
+          "uuid" => poly.uuid = attr.as_sexpr_into()?,
+          "width" => poly.width = attr.discard(1)?.next_into()?,
+          "fill" => poly.fill = attr.discard(1)?.next_symbol()? == "yes",
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(poly)
+  }
 }
 
 /// Footprint curve (Cubic Bezier)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct FootprintCurve {
   /// Four control points of the Bezier curve
-  pub points: [Point; 4],
+  pub points: PointList,
   /// Layer
   pub layer: Layer,
   /// Stroke definition
   pub stroke: Stroke,
   /// Locked flag
   pub locked: bool,
+  /// Width of the polygon stroke (prior to version 7)
+  pub width: f32,
   /// Unique identifier
   pub uuid: Uuid,
 }
 
+impl TryFrom<SExpr> for FootprintCurve {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut poly = Self::default();
+
+    expect_eq!(list.next_symbol()?, "fp_curve", "FootprintLine::try_from");
+
+    while let Some(list) = list.next_maybe() {
+      match list {
+        SExpr::Symbol(s) if s == "locked" => poly.locked = false,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "pts" => poly.points = attr.as_sexpr_into()?,
+
+          "layer" => poly.layer = attr.as_sexpr_into()?,
+          "stroke" => poly.stroke = attr.as_sexpr_into()?,
+          "uuid" => poly.uuid = attr.as_sexpr_into()?,
+          "width" => poly.width = attr.discard(1)?.next_into()?,
+
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(poly)
+  }
+}
+
 /// Footprint pad
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Pad {
   /// Pad number
   pub number: String,
@@ -705,9 +1091,61 @@ pub struct Pad {
   pub custom_primitives: Option<CustomPadPrimitives>,
 }
 
+impl TryFrom<SExpr> for Pad {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    let mut pad = Self::default();
+
+    expect_eq!(list.next_symbol()?, "pad", "FootprintLine::try_from");
+
+    while let Some(list) = list.next_maybe() {
+      match list {
+        SExpr::Symbol(s) if s == "locked" => pad.locked = false,
+
+        SExpr::Symbol(s) if s == "smd" => pad.pad_type = PadType::Smd,
+        SExpr::Symbol(s) if s == "connect" => pad.pad_type = PadType::Connect,
+        SExpr::Symbol(s) if s == "thru_hole" => pad.pad_type = PadType::ThroughHole,
+        SExpr::Symbol(s) if s == "np_thru_hole" => pad.pad_type = PadType::NonPlatedThroughHole,
+
+        SExpr::Symbol(s) if s == "oval" => pad.shape = PadShape::Oval,
+        SExpr::Symbol(s) if s == "circle" => pad.shape = PadShape::Circle,
+        SExpr::Symbol(s) if s == "custom" => pad.shape = PadShape::Custom,
+        SExpr::Symbol(s) if s == "rect" => pad.shape = PadShape::Rectangle,
+        SExpr::Symbol(s) if s == "trapezoid" => pad.shape = PadShape::Trapezoid,
+        SExpr::Symbol(s) if s == "roundrect" => pad.shape = PadShape::RoundedRectangle,
+
+        SExpr::List(mut attr) => match attr.peek_name()? {
+          "size" => {
+            attr.discard(1)?; // Discard the "size" keyword
+            let x: f64 = attr.next_into()?;
+            let y: f64 = attr.next_into()?;
+            pad.size = (x, y)
+          }
+
+          "layers" => {
+            attr.discard(1)?; // Discard the "layers" keyword
+            while let Some(layer) = attr.next_maybe_list()? {
+              pad.layers.push(layer.as_sexpr_into()?);
+            }
+          }
+          // "stroke" => pad.stroke = attr.as_sexpr_into()?,
+          // "uuid" => pad.uuid = attr.as_sexpr_into()?,
+          // "width" => pad.width = attr.discard(1)?.next_into()?,
+          name => crate::catch_all!(name),
+        },
+        name => crate::catch_all!(name),
+      }
+    }
+
+    Ok(pad)
+  }
+}
+
 /// Pad types
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum PadType {
+  #[default]
   ThroughHole,
   Smd,
   Connect,
@@ -715,9 +1153,10 @@ pub enum PadType {
 }
 
 /// Pad shapes
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum PadShape {
   Circle,
+  #[default]
   Rectangle,
   Oval,
   Trapezoid,
@@ -726,15 +1165,17 @@ pub enum PadShape {
 }
 
 /// Pad properties
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum PadProperty {
+  #[default]
   Heatsink,
   Castellated,
 }
 
 /// Pad corners for chamfering
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum PadCorner {
+  #[default]
   TopLeft,
   TopRight,
   BottomLeft,
@@ -742,7 +1183,7 @@ pub enum PadCorner {
 }
 
 /// Drill definition
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Drill {
   /// Oval drill flag
   pub oval: bool,

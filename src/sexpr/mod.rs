@@ -1,11 +1,11 @@
-use crate::parser::{ParserError, TryFromSExpr};
+use crate::parser::ParserError;
 pub use sexpr_list::SExprList;
 
 mod parse_sexpr;
 mod sexpr_list;
 pub use parse_sexpr::parse_sexpr;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum SExpr {
   List(SExprList),
   Symbol(SExprSymbol),
@@ -16,15 +16,15 @@ pub enum SExpr {
 
 impl SExpr {
   pub fn as_list(self) -> Result<SExprList, ParserError> {
-    SExprList::try_from_with_context(self)
+    self.try_into()
   }
 }
 
 #[macro_export]
 macro_rules! impl_from_into {
   ($name:ident, $expected: path) => {
-    impl TryFromSExpr for $name {
-      const CONTEXT: &'static str = stringify!($name);
+    impl TryFrom<SExpr> for $name {
+      type Error = ParserError;
 
       fn try_from(expr: SExpr) -> Result<Self, ParserError> {
         match expr {
@@ -64,8 +64,8 @@ impl SExprSymbol {
 pub struct SExprValue(pub String);
 impl_from_into!(SExprValue, SExpr::Value);
 
-impl TryFromSExpr for String {
-  const CONTEXT: &'static str = "sexpr::String";
+impl TryFrom<SExpr> for String {
+  type Error = ParserError;
 
   fn try_from(expr: SExpr) -> Result<Self, ParserError> {
     match expr {
@@ -78,34 +78,56 @@ impl TryFromSExpr for String {
   }
 }
 
-impl TryFromSExpr for f32 {
-  const CONTEXT: &'static str = "sexpr::f32";
+impl SExprValue {
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+}
+
+impl TryFrom<SExpr> for f64 {
+  type Error = ParserError;
+
+  fn try_from(expr: SExpr) -> Result<Self, ParserError> {
+    match expr {
+      SExpr::Float(d) => Ok(d),
+      SExpr::Hex(d) => Ok(d as f64),
+      expr => crate::error!(SExpr, "Value or Hex", expr),
+    }
+  }
+}
+
+impl TryFrom<SExpr> for f32 {
+  type Error = ParserError;
 
   fn try_from(expr: SExpr) -> Result<Self, ParserError> {
     match expr {
       SExpr::Float(d) => Ok(d as f32),
       SExpr::Hex(d) => Ok(d as f32),
-
-      expr => Err(ParserError::unexpected_sexpr(
-        stringify!(SExpr::Value or SExpr::Hex),
-        expr,
-      )),
+      expr => crate::error!(SExpr, "Value or Hex", expr),
     }
   }
 }
 
-impl TryFromSExpr for u32 {
-  const CONTEXT: &'static str = "sexpr::u32";
+impl TryFrom<SExpr> for u32 {
+  type Error = ParserError;
 
   fn try_from(expr: SExpr) -> Result<Self, ParserError> {
     match expr {
       SExpr::Float(d) => Ok(d as u32),
       SExpr::Hex(d) => Ok(d as u32),
+      expr => crate::error!(SExpr, "Value or Hex", expr),
+    }
+  }
+}
 
-      expr => Err(ParserError::unexpected_sexpr(
-        stringify!(SExpr::Value or SExpr::Hex),
-        expr,
-      )),
+impl TryFrom<SExpr> for u8 {
+  type Error = ParserError;
+
+  fn try_from(expr: SExpr) -> Result<Self, ParserError> {
+    match expr {
+      SExpr::Float(d) => Ok(d as u8),
+      SExpr::Hex(d) => Ok(d as u8),
+      expr => crate::error!(SExpr, "Value or Hex", expr),
     }
   }
 }

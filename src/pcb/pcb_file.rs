@@ -1,11 +1,18 @@
 use crate::{
   expect_eq,
-  parser::{ParserError, TryFromSExpr},
+  parser::ParserError,
   sexpr::{SExpr, SExprSymbol},
 };
 
 pub fn parse_pcb_file(input: &str) -> Result<PcbFile, ParserError> {
-  let sexprs = crate::sexpr::parse_sexpr(input).map_err(ParserError::SExpressionError)?;
+  let sexprs = crate::sexpr::parse_sexpr(input).map_err(|error| ParserError {
+    found: error,
+    kind: crate::parser::ParserErrorKind::SExpressionError,
+    expected: "valid KiCad PCB file".to_string(),
+    in_context: vec![crate::context!()],
+    backtrace: backtrace::Backtrace::new(),
+  })?;
+
   sexprs.as_sexpr_into()
 }
 
@@ -20,12 +27,14 @@ pub struct PcbFile {
   pub layers: Vec<PcbLayer>,
   pub properties: Vec<PcbProperty>,
   pub nets: Vec<PcbNet>,
+
+  pub footprints: Vec<crate::common::Footprint>,
 }
 
-impl TryFromSExpr for PcbFile {
-  const CONTEXT: &'static str = "pcb_file::PcbFile";
+impl TryFrom<SExpr> for PcbFile {
+  type Error = ParserError;
 
-  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
     let mut list = value.as_list()?;
 
     let mut pcb_file = PcbFile::default();
@@ -45,6 +54,7 @@ impl TryFromSExpr for PcbFile {
         "general" => pcb_file.general = list.as_sexpr_into()?,
         "layers" => pcb_file.layers = list.as_sexpr_into()?,
         "net" => pcb_file.nets.push(list.as_sexpr_into()?),
+        "footprint" => pcb_file.footprints.push(list.as_sexpr_into()?),
 
         _other => {
           // TODO: Maybe log?
@@ -69,10 +79,10 @@ pub struct PcbNet {
   pub name: String,
 }
 
-impl TryFromSExpr for PcbNet {
-  const CONTEXT: &'static str = "pcb_file::PcbNet";
+impl TryFrom<SExpr> for PcbNet {
+  type Error = ParserError;
 
-  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
     let mut list = value.as_list()?;
     let mut net = PcbNet::default();
 
@@ -90,10 +100,10 @@ pub struct PcbFileGeneral {
   pub thickness: f64,
 }
 
-impl TryFromSExpr for PcbFileGeneral {
-  const CONTEXT: &'static str = "pcb_file::PcbFileGeneral";
+impl TryFrom<SExpr> for PcbFileGeneral {
+  type Error = ParserError;
 
-  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
     let mut list = value.as_list()?;
     let mut general = PcbFileGeneral::default();
 
@@ -125,7 +135,7 @@ pub struct PcbLayer {
   pub user_name: Option<String>,
 }
 
-impl TryFromSExpr for Vec<PcbLayer> {
+impl TryFrom<SExpr> for Vec<PcbLayer> {
   type Error = ParserError;
 
   fn try_from(value: SExpr) -> Result<Self, Self::Error> {
@@ -134,12 +144,13 @@ impl TryFromSExpr for Vec<PcbLayer> {
     expect_eq!(list.next_symbol()?, "layers", "PcbLayer::try_from");
 
     while let Some(mut layer_list) = list.next_maybe_list()? {
-      let mut layer = PcbLayer::default();
-      layer.ordinal = layer_list.next_into()?;
-      layer.name = layer_list.next_into()?;
-      layer.layer_type = layer_list.next_into()?;
-      layer.user_name = list.next_maybe_into()?;
-      out.push(layer);
+      // ! Keep in mind the ordering is crucial here.
+      out.push(PcbLayer {
+        ordinal: layer_list.next_into()?,
+        name: layer_list.next_into()?,
+        layer_type: layer_list.next_into()?,
+        user_name: layer_list.next_maybe_into()?,
+      });
     }
 
     Ok(out)
@@ -156,10 +167,10 @@ pub enum PcbLayerType {
   Signal,
 }
 
-impl TryFromSExpr for PcbLayerType {
-  const CONTEXT: &'static str = "pcb_file::PcbLayerType";
+impl TryFrom<SExpr> for PcbLayerType {
+  type Error = ParserError;
 
-  fn try_from(value: SExpr) -> Result<Self, ParserError> {
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
     let symbol: SExprSymbol = value.try_into()?;
     match symbol.0.as_str() {
       "user" => Ok(PcbLayerType::User),
@@ -168,10 +179,7 @@ impl TryFromSExpr for PcbLayerType {
       "power" => Ok(PcbLayerType::Power),
       "signal" => Ok(PcbLayerType::Signal),
 
-      _ => Err(ParserError::unexpected(
-        "valid layer type",
-        format!("{}", symbol.0,
-      )),
+      found => crate::error!("Valid PCB Layer", found),
     }
   }
 }
