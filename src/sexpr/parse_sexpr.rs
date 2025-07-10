@@ -7,7 +7,7 @@ use nom::{
   error::{ContextError, ParseError, context},
   multi::separated_list0,
   number::complete::double,
-  sequence::{delimited, preceded, separated_pair, terminated},
+  sequence::{delimited, preceded, terminated},
 };
 
 use nom_language::error::{VerboseError, convert_error};
@@ -93,20 +93,6 @@ fn list<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
   .parse(i)
 }
 
-fn named_list<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
-  i: &'a str,
-) -> IResult<&'a str, (&'a str, Vec<SExpr>), E> {
-  context(
-    "list",
-    preceded(
-      char('('),
-      terminated(separated_pair(symbol, sp, list), preceded(sp, char(')'))),
-    ),
-  )
-  .parse(i)
-}
-
-/// here, we apply the space parser before trying to parse a value
 fn sexpr<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
   i: &'a str,
 ) -> IResult<&'a str, SExpr, E> {

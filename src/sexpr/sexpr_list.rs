@@ -1,12 +1,8 @@
-use crate::{
-  impl_from_into,
-  parser::{ParserError, TryFromSExpr},
-  sexpr::SExprSymbol,
-};
+use crate::{impl_from_into, parser::ParserError, sexpr::SExprSymbol};
 
 use super::SExpr;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SExprList(pub Vec<SExpr>);
 impl_from_into!(SExprList, SExpr::List);
 
@@ -29,24 +25,33 @@ impl SExprList {
   /// # Errors
   ///
   /// Returns a `ParserError` if the conversion fails.
-  pub fn as_sexpr_into<T: TryFromSExpr>(self) -> Result<T, ParserError> {
-    T::try_from_with_context(self.as_sexpr())
-  }
-
-  pub fn peek_name_maybe(&self) -> Option<&str> {
-    if let Some(SExpr::Symbol(SExprSymbol(name))) = self.0.first() {
-      Some(name)
-    } else {
-      None
-    }
+  pub fn as_sexpr_into<T>(self) -> Result<T, ParserError>
+  where
+    T: TryFrom<SExpr, Error = ParserError>,
+  {
+    self.as_sexpr().try_into()
   }
 
   pub fn peek_maybe(&self) -> Option<&SExpr> {
     self.0.first()
   }
 
+  pub fn peek_name_maybe(&self) -> Result<Option<&str>, ParserError> {
+    match self.peek_maybe() {
+      None => Ok(None),
+      Some(SExpr::Symbol(SExprSymbol(name))) => Ok(Some(name)),
+      Some(other) => crate::error!(SExpr, "peek(Symbol)", other.clone()),
+    }
+  }
+
   pub fn peek(&self) -> Result<&SExpr, ParserError> {
-    self.peek_maybe().ok_or_else(|| ParserError::UnexpectedEnd)
+    self.peek_maybe().ok_or_else(|| ParserError {
+      expected: "More SExpr".to_string(),
+      found: "end of list".to_string(),
+      kind: crate::parser::ParserErrorKind::UnexpectedEnd,
+      in_context: vec![crate::context!()],
+      backtrace: backtrace::Backtrace::new(),
+    })
   }
 
   /// Returns a reference to the name of the first element in the `SExprList` if it is a symbol.
@@ -62,44 +67,45 @@ impl SExprList {
   ///
   /// Returns a `ParserError::UnexpectedSExpr` if the first element is not a symbol or the list is empty.
   ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let list = SExprList::from(vec![SExpr::Symbol(SExprSymbol("foo".to_string()))]);
-  /// assert_eq!(list.peek_name().unwrap(), "foo");
-  /// ```
-  pub fn peek_name(&self) -> Result<&str, ParserError> {
-    self.peek_name_maybe().ok_or_else(|| {
-      ParserError::unexpected_sexpr(
-        "peek_name(Symbol)",
-        format!(
-          "{:?}",
-          self
-            .0
-            .first()
-            .cloned()
-            .unwrap_or(SExpr::List(SExprList(vec![]))),
-        ),
-      )
+  pub fn peek_name(&mut self) -> Result<&str, ParserError> {
+    self.peek_name_maybe()?.ok_or_else(|| ParserError {
+      expected: "More Symbol".to_string(),
+      found: "end of list".to_string(),
+      kind: crate::parser::ParserErrorKind::UnexpectedEnd,
+      in_context: vec![crate::context!()],
+      backtrace: backtrace::Backtrace::new(),
     })
   }
 
   pub fn discard(&mut self, amount: usize) -> Result<&mut Self, ParserError> {
     if amount > self.0.len() {
-      return Err(ParserError::UnexpectedEnd);
+      return Err(ParserError {
+        expected: "More tokens".to_string(),
+        found: "end of list".to_string(),
+        kind: crate::parser::ParserErrorKind::UnexpectedEnd,
+        in_context: vec![crate::context!()],
+        backtrace: backtrace::Backtrace::new(),
+      });
     }
 
-    self.0.drain(0..amount);
+    for _ in 0..amount {
+      self.0.remove(0);
+    }
+
     Ok(self)
   }
 
   pub fn next_maybe(&mut self) -> Option<SExpr> {
-    self.0.pop()
+    if self.0.is_empty() {
+      None
+    } else {
+      Some(self.0.remove(0))
+    }
   }
 
   pub fn next_maybe_into<T>(&mut self) -> Result<Option<T>, ParserError>
   where
-    T: TryFromSExpr,
+    T: TryFrom<SExpr, Error = ParserError>,
   {
     let Some(expr) = self.next_maybe() else {
       return Ok(None);
@@ -112,11 +118,21 @@ impl SExprList {
     self.next_maybe_into()
   }
 
+  pub fn next_maybe_symbol(&mut self) -> Result<Option<SExprSymbol>, ParserError> {
+    self.next_maybe_into()
+  }
+
   pub fn next_any(&mut self) -> Result<SExpr, ParserError> {
-    if let Some(expr) = self.next() {
+    if let Some(expr) = self.next_maybe() {
       Ok(expr)
     } else {
-      Err(ParserError::UnexpectedEnd)
+      Err(ParserError {
+        expected: "More tokens".to_string(),
+        found: "end of list".to_string(),
+        kind: crate::parser::ParserErrorKind::UnexpectedEnd,
+        in_context: vec![crate::context!()],
+        backtrace: backtrace::Backtrace::new(),
+      })
     }
   }
 
@@ -142,9 +158,9 @@ impl SExprList {
   /// You want to convert the entire list at once into a type. In that case, use [`as_sexpr_into`] instead.
   pub fn next_into<T>(&mut self) -> Result<T, ParserError>
   where
-    T: TryFromSExpr,
+    T: TryFrom<SExpr, Error = ParserError>,
   {
-    T::try_from_with_context(self.next_any()?)
+    self.next_any()?.try_into()
   }
 
   pub fn next_symbol(&mut self) -> Result<SExprSymbol, ParserError> {
@@ -156,20 +172,16 @@ impl SExprList {
   }
 
   pub fn expect_end(&self) -> Result<(), ParserError> {
-    if self.0.is_empty() {
+    if self.0.len() == 0 {
       Ok(())
     } else {
-      Err(ParserError::UnexpectedLeftover {
-        leftover: self.0.clone(),
+      Err(ParserError {
+        expected: "Empty list".to_string(),
+        found: format!("{:?}", self.0),
+        kind: crate::parser::ParserErrorKind::Leftover,
+        in_context: vec![crate::context!()],
+        backtrace: backtrace::Backtrace::new(),
       })
     }
-  }
-}
-
-impl Iterator for SExprList {
-  type Item = SExpr;
-
-  fn next(&mut self) -> Option<Self::Item> {
-    self.0.pop()
   }
 }

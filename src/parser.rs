@@ -1,11 +1,14 @@
+use backtrace::Backtrace;
+
 use crate::sexpr::SExpr;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct ParserError {
   pub kind: ParserErrorKind,
   pub expected: String,
   pub found: String,
-  pub in_context: Vec<&'static str>,
+  pub in_context: Vec<String>,
+  pub backtrace: Backtrace,
 }
 
 #[derive(Debug, PartialEq)]
@@ -25,6 +28,7 @@ impl ParserError {
       expected: expected.into(),
       found: found.into(),
       in_context: vec![],
+      backtrace: Backtrace::new(),
     }
   }
 
@@ -34,27 +38,12 @@ impl ParserError {
       expected: expected.into(),
       found: format!("{:?}", found.into()),
       in_context: vec![],
+      backtrace: Backtrace::new(),
     }
   }
 
-  pub fn add_context(mut self, context: &'static str) -> Self {
-    self.in_context.push(context);
+  pub fn add_context(mut self, context: impl Into<String>) -> Self {
+    self.in_context.push(context.into());
     self
-  }
-}
-
-pub trait TryFromSExpr: Sized {
-  const CONTEXT: &'static str;
-
-  fn try_from(sexpr: SExpr) -> Result<Self, ParserError>;
-
-  fn try_from_with_context(sexpr: SExpr) -> Result<Self, ParserError> {
-    match Self::try_from(sexpr) {
-      Ok(value) => Ok(value),
-      Err(mut err) => {
-        err.in_context.push(Self::CONTEXT);
-        Err(err)
-      }
-    }
   }
 }
