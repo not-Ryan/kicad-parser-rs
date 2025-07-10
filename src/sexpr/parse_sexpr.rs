@@ -47,7 +47,7 @@ fn quoted_string<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
 
 fn hexadecimal<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
   i: &'a str,
-) -> IResult<&'a str, u64, E> {
+) -> IResult<&'a str, i64, E> {
   context(
     "hex",
     map(
@@ -57,7 +57,7 @@ fn hexadecimal<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
       ),
       |raw: &str| {
         let stripped = raw.replace('_', "");
-        u64::from_str_radix(&stripped, 16).unwrap()
+        i64::from_str_radix(&stripped, 16).unwrap()
       },
     ),
   )

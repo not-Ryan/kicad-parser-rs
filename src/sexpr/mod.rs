@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::parser::ParserError;
 pub use sexpr_list::SExprList;
 
@@ -11,7 +13,7 @@ pub enum SExpr {
   Symbol(SExprSymbol),
   Value(SExprValue),
   Float(f64),
-  Hex(u64),
+  Hex(i64),
 }
 
 impl SExpr {
@@ -84,6 +86,12 @@ impl SExprValue {
   }
 }
 
+impl Display for SExprValue {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.0)
+  }
+}
+
 impl TryFrom<SExpr> for f64 {
   type Error = ParserError;
 
@@ -127,6 +135,18 @@ impl TryFrom<SExpr> for u8 {
     match expr {
       SExpr::Float(d) => Ok(d as u8),
       SExpr::Hex(d) => Ok(d as u8),
+      expr => crate::error!(SExpr, "Value or Hex", expr),
+    }
+  }
+}
+
+impl TryFrom<SExpr> for i32 {
+  type Error = ParserError;
+
+  fn try_from(expr: SExpr) -> Result<Self, ParserError> {
+    match expr {
+      SExpr::Float(d) => Ok(d as i32),
+      SExpr::Hex(d) => Ok(d as i32),
       expr => crate::error!(SExpr, "Value or Hex", expr),
     }
   }
