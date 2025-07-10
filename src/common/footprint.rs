@@ -37,9 +37,7 @@
 //! as documented in the KiCad file format specification. All coordinate values
 //! are in millimeters, and angles are in degrees.
 
-use std::str::FromStr;
-
-use crate::parser::{ParseableFromList, ParserError};
+use crate::{expect_eq, parser::ParserError, sexpr::SExpr};
 
 /// Position identifier defining X/Y coordinates and optional rotation angle
 #[derive(Debug, Clone, PartialEq)]
@@ -50,6 +48,21 @@ pub struct Position {
   pub y: f64,
   /// Optional rotation angle in degrees
   pub angle: Option<f64>,
+}
+
+impl TryFrom<SExpr> for Position {
+  type Error = ParserError;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "at", "Position::try_from");
+
+    let x: f64 = list.next_into()?;
+    let y: f64 = list.next_into()?;
+    let angle: Option<f64> = list.next_maybe_into()?;
+    list.expect_end()?;
+
+    Ok(Position { x, y, angle })
+  }
 }
 
 /// Coordinate point for use in point lists
@@ -140,6 +153,23 @@ pub enum VerticalJustify {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Uuid(pub String);
 
+impl TryFrom<SExpr> for Uuid {
+  type Error = ParserError;
+
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "uuid", "Uuid::try_from");
+
+    let uuid_str: String = list.next_into()?;
+    if uuid_str.is_empty() {
+      return Err(ParserError::unexpected("Non-empty UUID", uuid_str));
+    }
+
+    list.expect_end()?;
+    Ok(Uuid(uuid_str))
+  }
+}
+
 /// Property key-value pair
 #[derive(Debug, Clone, PartialEq)]
 pub struct Property {
@@ -150,9 +180,10 @@ pub struct Property {
 }
 
 /// Canonical layer names
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum Layer {
   // Copper layers
+  #[default]
   FCu,
   BCu,
   In1Cu,
@@ -221,13 +252,77 @@ pub enum Layer {
   User9,
 }
 
-impl ParseableFromList for Layer {
-  fn parse(mut parser: crate::parser::Parser) -> Result<Self, crate::parser::ParserError> {
-    parser.next_symbol_is("layer")?;
-    let name: String = parser.next_expect()?;
-    let layer = Layer::from_str(&name)?;
+impl TryFrom<SExpr> for Layer {
+  type Error = ParserError;
 
-    parser.expect_end()?;
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
+    expect_eq!(list.next_symbol()?, "layer", "Layer::try_from");
+
+    let layer = match list.next_symbol()?.as_str() {
+      "F.Cu" => Layer::FCu,
+      "B.Cu" => Layer::BCu,
+      "In1.Cu" => Layer::In1Cu,
+      "In2.Cu" => Layer::In2Cu,
+      "In3.Cu" => Layer::In3Cu,
+      "In4.Cu" => Layer::In4Cu,
+      "In5.Cu" => Layer::In5Cu,
+      "In6.Cu" => Layer::In6Cu,
+      "In7.Cu" => Layer::In7Cu,
+      "In8.Cu" => Layer::In8Cu,
+      "In9.Cu" => Layer::In9Cu,
+      "In10.Cu" => Layer::In10Cu,
+      "In11.Cu" => Layer::In11Cu,
+      "In12.Cu" => Layer::In12Cu,
+      "In13.Cu" => Layer::In13Cu,
+      "In14.Cu" => Layer::In14Cu,
+      "In15.Cu" => Layer::In15Cu,
+      "In16.Cu" => Layer::In16Cu,
+      "In17.Cu" => Layer::In17Cu,
+      "In18.Cu" => Layer::In18Cu,
+      "In19.Cu" => Layer::In19Cu,
+      "In20.Cu" => Layer::In20Cu,
+      "In21.Cu" => Layer::In21Cu,
+      "In22.Cu" => Layer::In22Cu,
+      "In23.Cu" => Layer::In23Cu,
+      "In24.Cu" => Layer::In24Cu,
+      "In25.Cu" => Layer::In25Cu,
+      "In26.Cu" => Layer::In26Cu,
+      "In27.Cu" => Layer::In27Cu,
+      "In28.Cu" => Layer::In28Cu,
+      "In29.Cu" => Layer::In29Cu,
+      "In30.Cu" => Layer::In30Cu,
+      "B.Adhes" => Layer::BAdhes,
+      "F.Adhes" => Layer::FAdhes,
+      "B.Paste" => Layer::BPaste,
+      "F.Paste" => Layer::FPaste,
+      "B.SilkS" => Layer::BSilkS,
+      "F.SilkS" => Layer::FSilkS,
+      "B.Mask" => Layer::BMask,
+      "F.Mask" => Layer::FMask,
+      "Dwgs.User" => Layer::DwgsUser,
+      "Cmts.User" => Layer::CmtsUser,
+      "Eco1.User" => Layer::Eco1User,
+      "Eco2.User" => Layer::Eco2User,
+      "Edge.Cuts" => Layer::EdgeCuts,
+      "F.CrtYd" => Layer::FCrtYd,
+      "B.CrtYd" => Layer::BCrtYd,
+      "F.Fab" => Layer::FFab,
+      "B.Fab" => Layer::BFab,
+      "User.1" => Layer::User1,
+      "User.2" => Layer::User2,
+      "User.3" => Layer::User3,
+      "User.4" => Layer::User4,
+      "User.5" => Layer::User5,
+      "User.6" => Layer::User6,
+      "User.7" => Layer::User7,
+      "User.8" => Layer::User8,
+      "User.9" => Layer::User9,
+
+      s => return Err(ParserError::unexpected("Valid layer", s)),
+    };
+
+    list.expect_end()?;
     Ok(layer)
   }
 }
@@ -278,7 +373,7 @@ pub struct Model3D {
 
 /// Main footprint definition
 /// Prior to version 6, this was called `module`
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Footprint {
   /// Library link (for board footprints)
   pub library_link: Option<String>,
@@ -338,24 +433,37 @@ pub struct Footprint {
   pub models: Vec<Model3D>,
 }
 
-impl ParseableFromList for Footprint {
-  fn parse(mut parser: crate::parser::Parser) -> Result<Self, crate::parser::ParserError> {
-    let name: String = parser.next_expect()?;
-    let layer: Layer = parser.next_parse()?;
-    let mut footprint = Footprint::new(layer);
+impl TryFrom<SExpr> for Footprint {
+  type Error = ParserError;
 
-    while let Some(mut parser) = parser.next_parser_maybe()? {
-      match parser.peek_symbol_str()?.as_str() {
-        "uuid" => {
-          let uuid_str: String = parser.next_expect()?;
-          footprint.uuid = Some(Uuid(uuid_str));
-        }
-        "at" => {
-          let uuid_str: String = parser.next_expect()?;
-          footprint.uuid = Some(Uuid(uuid_str));
-        }
+  fn try_from(value: SExpr) -> Result<Self, Self::Error> {
+    let mut list = value.as_list()?;
 
-        name => parser.error_unknown(name),
+    let mut footprint = Footprint::default();
+
+    while let Some(next) = list.next_maybe() {
+      match next {
+        SExpr::Value(value) => footprint.library_link = Some(value.0),
+        SExpr::Symbol(symbol) if symbol == "locked" => footprint.locked = true,
+        SExpr::Symbol(symbol) if symbol == "placed" => footprint.placed = true,
+
+        SExpr::List(mut list) => match list.peek_name()? {
+          "uuid" => footprint.uuid = Some(list.as_sexpr_into()?),
+          "layer" => footprint.layer = list.as_sexpr_into()?,
+
+          "at" => footprint.position = Some(list.as_sexpr_into()?),
+          "path" => footprint.path = Some(list.discard(1)?.next_into()?),
+
+          // TODO: Where do these go?
+          // "sheetname" => footprint.name = Some(list.discard(1)?.next_into()?),
+          // "sheetfile" => footprint.sheetfile = Some(list.discard(1)?.next_into()?),
+          // "attr" => footprint.attr = attr(list.discard(1)?.next_into()?),
+          name => {
+            // TODO: Unknown list name. Maybe log?
+          }
+        },
+
+        _ => {}
       }
     }
 
@@ -776,57 +884,6 @@ impl Default for TextEffects {
   }
 }
 
-impl Footprint {
-  /// Create a new footprint with minimal required fields
-  pub fn new(layer: Layer) -> Self {
-    Self {
-      library_link: None,
-      locked: false,
-      placed: true,
-      layer,
-      tedit: None,
-      uuid: None,
-      position: None,
-      tags: None,
-      description: None,
-      properties: Vec::new(),
-      path: None,
-      autoplace_cost90: None,
-      autoplace_cost180: None,
-      solder_mask_margin: None,
-      solder_paste_margin: None,
-      solder_paste_ratio: None,
-      clearance: None,
-      zone_connect: None,
-      thermal_width: None,
-      thermal_gap: None,
-      attributes: None,
-      private_layers: Vec::new(),
-      net_tie_pad_groups: Vec::new(),
-      graphics: Vec::new(),
-      pads: Vec::new(),
-      zones: Vec::new(),
-      groups: Vec::new(),
-      models: Vec::new(),
-    }
-  }
-
-  /// Add a pad to the footprint
-  pub fn add_pad(&mut self, pad: Pad) {
-    self.pads.push(pad);
-  }
-
-  /// Add a graphic item to the footprint
-  pub fn add_graphic(&mut self, graphic: FootprintGraphic) {
-    self.graphics.push(graphic);
-  }
-
-  /// Add a 3D model to the footprint
-  pub fn add_model(&mut self, model: Model3D) {
-    self.models.push(model);
-  }
-}
-
 impl Default for Uuid {
   fn default() -> Self {
     Self::new()
@@ -1013,74 +1070,5 @@ impl std::fmt::Display for Layer {
       Layer::User9 => "User.9",
     };
     write!(f, "{name}")
-  }
-}
-
-impl std::str::FromStr for Layer {
-  type Err = ParserError;
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    match s {
-      "F.Cu" => Ok(Layer::FCu),
-      "B.Cu" => Ok(Layer::BCu),
-      "In1.Cu" => Ok(Layer::In1Cu),
-      "In2.Cu" => Ok(Layer::In2Cu),
-      "In3.Cu" => Ok(Layer::In3Cu),
-      "In4.Cu" => Ok(Layer::In4Cu),
-      "In5.Cu" => Ok(Layer::In5Cu),
-      "In6.Cu" => Ok(Layer::In6Cu),
-      "In7.Cu" => Ok(Layer::In7Cu),
-      "In8.Cu" => Ok(Layer::In8Cu),
-      "In9.Cu" => Ok(Layer::In9Cu),
-      "In10.Cu" => Ok(Layer::In10Cu),
-      "In11.Cu" => Ok(Layer::In11Cu),
-      "In12.Cu" => Ok(Layer::In12Cu),
-      "In13.Cu" => Ok(Layer::In13Cu),
-      "In14.Cu" => Ok(Layer::In14Cu),
-      "In15.Cu" => Ok(Layer::In15Cu),
-      "In16.Cu" => Ok(Layer::In16Cu),
-      "In17.Cu" => Ok(Layer::In17Cu),
-      "In18.Cu" => Ok(Layer::In18Cu),
-      "In19.Cu" => Ok(Layer::In19Cu),
-      "In20.Cu" => Ok(Layer::In20Cu),
-      "In21.Cu" => Ok(Layer::In21Cu),
-      "In22.Cu" => Ok(Layer::In22Cu),
-      "In23.Cu" => Ok(Layer::In23Cu),
-      "In24.Cu" => Ok(Layer::In24Cu),
-      "In25.Cu" => Ok(Layer::In25Cu),
-      "In26.Cu" => Ok(Layer::In26Cu),
-      "In27.Cu" => Ok(Layer::In27Cu),
-      "In28.Cu" => Ok(Layer::In28Cu),
-      "In29.Cu" => Ok(Layer::In29Cu),
-      "In30.Cu" => Ok(Layer::In30Cu),
-      "B.Adhes" => Ok(Layer::BAdhes),
-      "F.Adhes" => Ok(Layer::FAdhes),
-      "B.Paste" => Ok(Layer::BPaste),
-      "F.Paste" => Ok(Layer::FPaste),
-      "B.SilkS" => Ok(Layer::BSilkS),
-      "F.SilkS" => Ok(Layer::FSilkS),
-      "B.Mask" => Ok(Layer::BMask),
-      "F.Mask" => Ok(Layer::FMask),
-      "Dwgs.User" => Ok(Layer::DwgsUser),
-      "Cmts.User" => Ok(Layer::CmtsUser),
-      "Eco1.User" => Ok(Layer::Eco1User),
-      "Eco2.User" => Ok(Layer::Eco2User),
-      "Edge.Cuts" => Ok(Layer::EdgeCuts),
-      "F.CrtYd" => Ok(Layer::FCrtYd),
-      "B.CrtYd" => Ok(Layer::BCrtYd),
-      "F.Fab" => Ok(Layer::FFab),
-      "B.Fab" => Ok(Layer::BFab),
-      "User.1" => Ok(Layer::User1),
-      "User.2" => Ok(Layer::User2),
-      "User.3" => Ok(Layer::User3),
-      "User.4" => Ok(Layer::User4),
-      "User.5" => Ok(Layer::User5),
-      "User.6" => Ok(Layer::User6),
-      "User.7" => Ok(Layer::User7),
-      "User.8" => Ok(Layer::User8),
-      "User.9" => Ok(Layer::User9),
-
-      s => Err(ParserError::expected("Valid layer", s)),
-    }
   }
 }

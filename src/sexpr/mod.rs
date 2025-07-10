@@ -1,6 +1,8 @@
-use crate::parser::{Expectable, Parser, ParserError};
+use crate::parser::{ParserError, TryFromSExpr};
+pub use sexpr_list::SExprList;
 
 mod parse_sexpr;
+mod sexpr_list;
 pub use parse_sexpr::parse_sexpr;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -12,59 +14,98 @@ pub enum SExpr {
   Hex(u64),
 }
 
-macro_rules! impl_expectable {
+impl SExpr {
+  pub fn as_list(self) -> Result<SExprList, ParserError> {
+    SExprList::try_from_with_context(self)
+  }
+}
+
+#[macro_export]
+macro_rules! impl_from_into {
   ($name:ident, $expected: path) => {
-    impl Expectable for $name {
-      fn expect(expr: SExpr) -> Result<Self, ParserError> {
+    impl TryFromSExpr for $name {
+      const CONTEXT: &'static str = stringify!($name);
+
+      fn try_from(expr: SExpr) -> Result<Self, ParserError> {
         match expr {
           $expected(me) => Ok(me),
-          expr => Err(ParserError::UnexpectedSExpr {
-            expected: stringify!($expected).to_string(),
-            found: expr,
-          }),
+          expr => Err(ParserError::unexpected_sexpr(stringify!($expected), expr)),
         }
+      }
+    }
+
+    impl TryFrom<$name> for SExpr {
+      type Error = ParserError;
+
+      fn try_from(expr: $name) -> Result<SExpr, ParserError> {
+        Ok($expected(expr))
       }
     }
   };
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SExprList(pub Vec<SExpr>);
-impl_expectable!(SExprList, SExpr::List);
+pub struct SExprSymbol(pub String);
+impl_from_into!(SExprSymbol, SExpr::Symbol);
 
-impl SExprList {
-  pub fn name(&self) -> Option<&str> {
-    if let Some(SExpr::Symbol(SExprSymbol(name))) = self.0.first() {
-      Some(name)
-    } else {
-      None
-    }
-  }
-
-  pub fn into_parser(self) -> Parser {
-    Parser::new(self)
+impl PartialEq<&str> for SExprSymbol {
+  fn eq(&self, other: &&str) -> bool {
+    other == &self.0
   }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct SExprSymbol(pub String);
-impl_expectable!(SExprSymbol, SExpr::Symbol);
+impl SExprSymbol {
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+}
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SExprValue(pub String);
-impl_expectable!(SExprValue, SExpr::Value);
+impl_from_into!(SExprValue, SExpr::Value);
 
-impl Expectable for String {
-  fn expect(expr: SExpr) -> Result<Self, ParserError> {
+impl TryFromSExpr for String {
+  const CONTEXT: &'static str = "sexpr::String";
+
+  fn try_from(expr: SExpr) -> Result<Self, ParserError> {
     match expr {
       SExpr::Value(me) => Ok(me.0),
-      expr => Err(ParserError::UnexpectedSExpr {
-        expected: stringify!(SExpr::Value).to_string(),
-        found: expr,
-      }),
+      expr => Err(ParserError::unexpected_sexpr(
+        stringify!(SExpr::Value),
+        expr,
+      )),
     }
   }
 }
 
-impl_expectable!(u64, SExpr::Hex);
-impl_expectable!(f64, SExpr::Float);
+impl TryFromSExpr for f32 {
+  const CONTEXT: &'static str = "sexpr::f32";
+
+  fn try_from(expr: SExpr) -> Result<Self, ParserError> {
+    match expr {
+      SExpr::Float(d) => Ok(d as f32),
+      SExpr::Hex(d) => Ok(d as f32),
+
+      expr => Err(ParserError::unexpected_sexpr(
+        stringify!(SExpr::Value or SExpr::Hex),
+        expr,
+      )),
+    }
+  }
+}
+
+impl TryFromSExpr for u32 {
+  const CONTEXT: &'static str = "sexpr::u32";
+
+  fn try_from(expr: SExpr) -> Result<Self, ParserError> {
+    match expr {
+      SExpr::Float(d) => Ok(d as u32),
+      SExpr::Hex(d) => Ok(d as u32),
+
+      expr => Err(ParserError::unexpected_sexpr(
+        stringify!(SExpr::Value or SExpr::Hex),
+        expr,
+      )),
+    }
+  }
+}
