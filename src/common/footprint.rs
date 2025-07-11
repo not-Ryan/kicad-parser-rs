@@ -272,8 +272,8 @@ impl TryFrom<SExpr> for Footprint {
           "uuid" => footprint.uuid = Some(list.as_sexpr_into()?),
           "layer" => footprint.layer = list.as_sexpr_into()?,
           // TEDIT?
+          "descr" | "description" => footprint.description = Some(list.discard(1)?.next_into()?),
           "at" => footprint.position = Some(list.as_sexpr_into()?),
-          "description" => footprint.description = Some(list.discard(1)?.next_into()?),
           "tags" => footprint.tags = Some(list.discard(1)?.next_into()?),
           "path" => footprint.path = Some(list.discard(1)?.next_into()?),
 

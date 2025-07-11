@@ -1,6 +1,6 @@
-use std::{fmt::Display, ops::Add};
+use std::fmt::Display;
 
-use crate::{expect_eq, parser::ParserError, sexpr::SExpr};
+use crate::{parser::ParserError, sexpr::SExpr};
 
 /// Position identifier defining X/Y coordinates and optional rotation angle
 #[derive(Default, Debug, Clone, PartialEq)]
