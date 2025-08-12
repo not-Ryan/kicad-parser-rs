@@ -8,6 +8,7 @@ use crate::{
 
 /// Text effects for controlling text display
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct TextEffects {
   /// Font settings
   pub font: Font,
@@ -21,6 +22,7 @@ pub struct TextEffects {
 
 /// Font definition
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Font {
   /// Font family name or "KiCad Font"
   pub face: Option<String>,
@@ -38,6 +40,7 @@ pub struct Font {
 
 /// Text justification options
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Justify {
   /// Horizontal justification
   pub horizontal: Option<HorizontalJustify>,
@@ -46,6 +49,7 @@ pub struct Justify {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum HorizontalJustify {
   Left,
   Right,
@@ -53,6 +57,7 @@ pub enum HorizontalJustify {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum VerticalJustify {
   Top,
   Bottom,
@@ -61,6 +66,7 @@ pub enum VerticalJustify {
 
 /// Universally unique identifier
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Uuid(pub String);
 
 impl TryFrom<SExpr> for Uuid {
@@ -82,6 +88,7 @@ impl TryFrom<SExpr> for Uuid {
 
 /// Canonical layer names
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Layer(String);
 
 impl TryFrom<SExpr> for Layer {
@@ -122,6 +129,7 @@ impl PartialEq<str> for Layer {
 
 /// Zone connection types
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ZoneConnect {
   /// Pad not connected to zone
   None = 0,
@@ -133,6 +141,7 @@ pub enum ZoneConnect {
 
 /// Footprint attributes
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintAttributes {
   /// Footprint type (SMD or through-hole)
   pub footprint_type: FootprintType,
@@ -172,6 +181,7 @@ impl TryFrom<SExpr> for FootprintAttributes {
 
 /// Footprint type classification
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum FootprintType {
   #[default]
   Smd,
@@ -180,6 +190,7 @@ pub enum FootprintType {
 
 /// 3D model definition
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Model3D {
   /// Path to 3D model file
   pub file: String,
@@ -194,6 +205,7 @@ pub struct Model3D {
 /// Main footprint definition
 /// Prior to version 6, this was called `module`
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Footprint {
   /// Library link (for board footprints)
   pub library_link: Option<String>,
@@ -328,6 +340,7 @@ impl GetBoundingBox for Footprint {
 
 /// Footprint pad
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Pad {
   /// Pad number
   pub number: String,
@@ -445,6 +458,7 @@ impl TryFrom<SExpr> for Pad {
 
 /// Pad types
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum PadType {
   #[default]
   ThroughHole,
@@ -455,6 +469,7 @@ pub enum PadType {
 
 /// Pad shapes
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum PadShape {
   Circle,
   #[default]
@@ -467,6 +482,7 @@ pub enum PadShape {
 
 /// Pad properties
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum PadProperty {
   #[default]
   Heatsink,
@@ -475,6 +491,7 @@ pub enum PadProperty {
 
 /// Pad corners for chamfering
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum PadCorner {
   #[default]
   TopLeft,
@@ -485,6 +502,7 @@ pub enum PadCorner {
 
 /// Drill definition
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Drill {
   /// Oval drill flag
   pub oval: bool,
@@ -498,6 +516,7 @@ pub struct Drill {
 
 /// Custom pad options
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct CustomPadOptions {
   /// Clearance type
   pub clearance: CustomPadClearance,
@@ -507,6 +526,7 @@ pub struct CustomPadOptions {
 
 /// Custom pad clearance types
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum CustomPadClearance {
   Outline,
   ConvexHull,
@@ -514,6 +534,7 @@ pub enum CustomPadClearance {
 
 /// Custom pad primitives
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct CustomPadPrimitives {
   /// Graphical items defining the pad shape
   pub graphics: Vec<PadGraphic>,
@@ -525,6 +546,7 @@ pub struct CustomPadPrimitives {
 
 /// Graphics items for custom pads
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum PadGraphic {
   Line {
     start: Point,
@@ -550,12 +572,14 @@ pub enum PadGraphic {
 
 /// Zone definition (placeholder)
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Zone {
   // TODO: Implement zone structure
 }
 
 /// Group definition (placeholder)
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Group {
   // TODO: Implement group structure
 }

@@ -1,6 +1,7 @@
 use crate::{parser::ParserError, sexpr::SExpr};
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PcbFileGeneral {
   /// The thickness token attribute defines the overall board thickness.
   pub thickness: f64,

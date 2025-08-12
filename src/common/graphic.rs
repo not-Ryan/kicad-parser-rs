@@ -6,6 +6,7 @@ use crate::{
 
 /// Stroke definition for drawing outlines
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Stroke {
   /// Line width
   pub width: f64,
@@ -39,6 +40,7 @@ impl TryFrom<SExpr> for Stroke {
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RgbaColor(u8, u8, u8, u8);
 
 impl TryFrom<SExpr> for RgbaColor {
@@ -59,6 +61,7 @@ impl TryFrom<SExpr> for RgbaColor {
 
 /// Valid stroke line styles
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum StrokeType {
   #[default]
   Default,
@@ -89,6 +92,7 @@ impl TryFrom<SExpr> for StrokeType {
 
 /// Footprint graphic items
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum Graphic {
   Text(FootprintText),
   TextBox(FootprintTextBox),
@@ -168,6 +172,7 @@ macro_rules! symbol_ends_with {
 
 /// Footprint text
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintText {
   /// Text type
   pub text_type: FootprintTextType,
@@ -243,6 +248,7 @@ impl GetBoundingBox for FootprintText {
 
 /// Footprint text types
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum FootprintTextType {
   #[default]
   Reference,
@@ -252,6 +258,7 @@ pub enum FootprintTextType {
 
 /// Footprint text box (from version 7)
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintTextBox {
   /// Locked flag
   pub locked: bool,
@@ -326,6 +333,7 @@ impl GetBoundingBox for FootprintTextBox {
 
 /// Footprint line
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintLine {
   /// Start point
   pub start: Point,
@@ -387,6 +395,7 @@ impl GetBoundingBox for FootprintLine {
 
 /// Footprint rectangle
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintRectangle {
   /// Upper left corner
   pub start: Point,
@@ -450,6 +459,7 @@ impl GetBoundingBox for FootprintRectangle {
 
 /// Footprint circle
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintCircle {
   /// Center point
   pub center: Point,
@@ -516,6 +526,7 @@ impl TryFrom<SExpr> for FootprintCircle {
 
 /// Footprint arc
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintArc {
   /// Start position
   pub start: Point,
@@ -584,6 +595,7 @@ impl GetBoundingBox for FootprintArc {
 
 /// Footprint polygon
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintPolygon {
   /// Polygon outline points
   pub points: PointList,
@@ -656,6 +668,7 @@ impl GetBoundingBox for FootprintPolygon {
 
 /// Footprint curve (Cubic Bezier)
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FootprintCurve {
   /// Four control points of the Bezier curve
   pub points: PointList,

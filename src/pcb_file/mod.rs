@@ -31,6 +31,7 @@ pub fn parse_pcb_file(input: &str) -> Result<PcbFile, ParserError> {
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PcbFile {
   pub version: String,
   pub generator: String,

@@ -4,6 +4,7 @@ use crate::{parser::ParserError, sexpr::SExpr};
 
 /// Position identifier defining X/Y coordinates and optional rotation angle
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Position {
   /// X coordinate in millimeters
   pub x: f64,
@@ -30,6 +31,7 @@ impl TryFrom<SExpr> for Position {
 
 /// Coordinate point for use in point lists
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Point {
   /// X coordinate in millimeters
   pub x: f64,
@@ -53,6 +55,7 @@ impl TryFrom<SExpr> for Point {
 }
 /// Coordinate point for use in point lists
 #[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PointList(pub Vec<Point>);
 
 impl TryFrom<SExpr> for PointList {
@@ -74,6 +77,7 @@ impl TryFrom<SExpr> for PointList {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct BoundingBox {
   pub min_x: f64,
   pub min_y: f64,

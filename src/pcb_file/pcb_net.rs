@@ -1,6 +1,7 @@
 use crate::{parser::ParserError, sexpr::SExpr};
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PcbNet {
   pub ordinal: u32,
   pub name: String,

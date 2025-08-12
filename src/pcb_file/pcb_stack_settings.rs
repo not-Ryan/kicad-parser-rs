@@ -2,6 +2,7 @@
 // The layer stack up definitions is a list of layer settings for each layer required to manufacture a board including the dielectric material between the actual layers defined in the board editor.
 // layer_stackup: Vec<PcbLayerStackupSetting>,
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PcbStackUpSettings {
   /// The optional copper_finish token is a string that defines the copper finish used to manufacture the board.
   pub copper_finish: Option<String>,
@@ -16,6 +17,7 @@ pub struct PcbStackUpSettings {
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum EdgeConnectorSetting {
   #[default]
   Bevelled,

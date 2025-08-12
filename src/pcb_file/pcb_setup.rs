@@ -1,6 +1,7 @@
 use super::PcbStackUpSettings;
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PcbSetup {
   /// The optional STACK_UP_SETTINGS define the parameters required to manufacture the board.
   pub stack_up_settings: Option<PcbStackUpSettings>,

@@ -4,6 +4,7 @@ use crate::{
 };
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct PcbLayer {
   /// The layer ORDINAL is an integer used to associate the layer stack ordering. This is mostly to ensure correct mapping when the number of layers is increased in the future.
   pub ordinal: u32,
@@ -38,6 +39,7 @@ impl TryFrom<SExpr> for Vec<PcbLayer> {
 }
 
 #[derive(Default, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum PcbLayerType {
   #[default]
   User,
