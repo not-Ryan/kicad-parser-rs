@@ -1,5 +1,5 @@
 [package]
-name = "kicad-parser-rs"
+name = "kicad-parser"
 version = "0.0.2"
 edition = "2024"
 publish =  ["devd"]
