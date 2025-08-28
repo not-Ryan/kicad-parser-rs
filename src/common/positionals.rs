@@ -14,6 +14,54 @@ pub struct Position {
   pub angle: Option<f64>,
 }
 
+impl Position {
+  pub fn transform_position(&self, sub_pos: &Position) -> Position {
+    if let Some(angle) = self.angle {
+      let angle = angle.to_radians();
+      Position {
+        x: self.x + (sub_pos.x * angle.cos() + sub_pos.y * angle.sin()),
+        y: self.y + (-sub_pos.x * angle.sin() + sub_pos.y * angle.cos()),
+        angle: sub_pos.angle,
+      }
+    } else {
+      Position {
+        x: self.x + sub_pos.x,
+        y: self.y + sub_pos.y,
+        angle: sub_pos.angle,
+      }
+    }
+  }
+
+  pub fn transform_angle(&self, point: impl Into<Point>) -> Point {
+    let point = point.into();
+    if let Some(angle) = self.angle {
+      let angle = angle.to_radians();
+      Point {
+        x: point.x * angle.cos() + point.y * angle.sin(),
+        y: -point.x * angle.sin() + point.y * angle.cos(),
+      }
+    } else {
+      point
+    }
+  }
+
+  pub fn transform_point(&self, point: impl Into<Point>) -> Point {
+    let point = point.into();
+    if let Some(angle) = self.angle {
+      let angle = angle.to_radians();
+      Point {
+        x: self.x + (point.x * angle.cos() + point.y * angle.sin()),
+        y: self.y + (-point.x * angle.sin() + point.y * angle.cos()),
+      }
+    } else {
+      Point {
+        x: self.x + point.x,
+        y: self.y + point.y,
+      }
+    }
+  }
+}
+
 impl TryFrom<SExpr> for Position {
   type Error = ParserError;
   fn try_from(value: SExpr) -> Result<Self, Self::Error> {
@@ -29,6 +77,15 @@ impl TryFrom<SExpr> for Position {
   }
 }
 
+impl From<(f64, f64)> for Point {
+  fn from(value: (f64, f64)) -> Self {
+    Point {
+      x: value.0,
+      y: value.1,
+    }
+  }
+}
+
 /// Coordinate point for use in point lists
 #[derive(Default, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -37,6 +94,12 @@ pub struct Point {
   pub x: f64,
   /// Y coordinate in millimeters
   pub y: f64,
+}
+
+impl Point {
+  pub fn as_tuple(&self) -> (f64, f64) {
+    (self.x, self.y)
+  }
 }
 
 impl TryFrom<SExpr> for Point {

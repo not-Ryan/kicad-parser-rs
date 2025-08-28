@@ -89,7 +89,7 @@ impl TryFrom<SExpr> for Uuid {
 /// Canonical layer names
 #[derive(Default, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct Layer(String);
+pub struct Layer(pub String);
 
 impl TryFrom<SExpr> for Layer {
   type Error = ParserError;
