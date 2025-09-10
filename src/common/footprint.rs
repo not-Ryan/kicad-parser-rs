@@ -183,9 +183,10 @@ impl TryFrom<SExpr> for FootprintAttributes {
 #[derive(Default, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum FootprintType {
-  #[default]
   Smd,
   ThroughHole,
+  #[default]
+  Unspecified,
 }
 
 /// 3D model definition
