@@ -178,6 +178,13 @@ impl BoundingBox {
     self.max_y - self.min_y
   }
 
+  pub fn center(&self) -> (f64, f64) {
+    (
+      (self.min_x + self.max_x) / 2.,
+      (self.min_y + self.max_y) / 2.,
+    )
+  }
+
   pub fn envelop(&mut self, other: &Self) {
     self.min_x = self.min_x.min(other.min_x);
     self.min_y = self.min_y.min(other.min_y);
