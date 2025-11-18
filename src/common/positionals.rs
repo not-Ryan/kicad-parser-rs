@@ -19,7 +19,7 @@ impl Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
       Position {
-        x: self.x + (sub_pos.x * angle.cos() + sub_pos.y * angle.sin()),
+        x: self.x + (sub_pos.x * angle.cos() - sub_pos.y * angle.sin()),
         y: self.y + (-sub_pos.x * angle.sin() + sub_pos.y * angle.cos()),
         angle: sub_pos.angle,
       }
@@ -37,7 +37,7 @@ impl Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
       Point {
-        x: point.x * angle.cos() + point.y * angle.sin(),
+        x: point.x * angle.cos() - point.y * angle.sin(),
         y: -point.x * angle.sin() + point.y * angle.cos(),
       }
     } else {
@@ -50,7 +50,7 @@ impl Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
       Point {
-        x: self.x + (point.x * angle.cos() + point.y * angle.sin()),
+        x: self.x + (point.x * angle.cos() - point.y * angle.sin()),
         y: self.y + (-point.x * angle.sin() + point.y * angle.cos()),
       }
     } else {
