@@ -651,10 +651,15 @@ impl GetBoundingBox for FootprintPolygon {
     let mut max_y = f64::NEG_INFINITY;
 
     for point in &self.points.0 {
-      min_x = min_x.min(point.x);
-      min_y = min_y.min(point.y);
-      max_x = max_x.max(point.x);
-      max_y = max_y.max(point.y);
+      match point {
+        super::PointItem::Point(point) => {
+          min_x = min_x.min(point.x);
+          min_y = min_y.min(point.y);
+          max_x = max_x.max(point.x);
+          max_y = max_y.max(point.y);
+        }
+        super::PointItem::Arc(arc) => todo!(),
+      }
     }
 
     BoundingBox {
@@ -721,10 +726,15 @@ impl GetBoundingBox for FootprintCurve {
     let mut max_y = f64::NEG_INFINITY;
 
     for point in &self.points.0 {
-      min_x = min_x.min(point.x);
-      min_y = min_y.min(point.y);
-      max_x = max_x.max(point.x);
-      max_y = max_y.max(point.y);
+      match point {
+        super::PointItem::Point(point) => {
+          min_x = min_x.min(point.x);
+          min_y = min_y.min(point.y);
+          max_x = max_x.max(point.x);
+          max_y = max_y.max(point.y);
+        }
+        super::PointItem::Arc(arc) => todo!(),
+      }
     }
 
     BoundingBox {

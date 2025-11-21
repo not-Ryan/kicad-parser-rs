@@ -174,6 +174,7 @@ impl TryFrom<SExpr> for PointList {
           out.0.push(PointItem::Point(pt));
         }
         "arc" => {
+          pt.next_symbol()?; // arc
           let mut list = pt.next_list()?;
           let mut arc = Arc::default();
           while let Some(list) = list.next_maybe() {
