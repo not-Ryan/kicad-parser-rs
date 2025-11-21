@@ -1,4 +1,7 @@
-use std::fmt::Display;
+use std::{
+  fmt::Display,
+  ops::{Add, AddAssign},
+};
 
 use crate::{parser::ParserError, sexpr::SExpr};
 
@@ -19,7 +22,7 @@ impl Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
       Position {
-        x: self.x + (sub_pos.x * angle.cos() - sub_pos.y * angle.sin()),
+        x: self.x + (sub_pos.x * angle.cos() + sub_pos.y * angle.sin()),
         y: self.y + (-sub_pos.x * angle.sin() + sub_pos.y * angle.cos()),
         angle: sub_pos.angle,
       }
@@ -37,8 +40,8 @@ impl Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
       Point {
-        x: point.x * angle.cos() - point.y * angle.sin(),
-        y: -point.x * angle.sin() + point.y * angle.cos(),
+        x: point.x * angle.cos() + point.y * angle.sin(),
+        y: -point.x * angle.sin() - point.y * angle.cos(),
       }
     } else {
       point
@@ -50,8 +53,8 @@ impl Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
       Point {
-        x: self.x + (point.x * angle.cos() - point.y * angle.sin()),
-        y: self.y + (-point.x * angle.sin() + point.y * angle.cos()),
+        x: self.x + (point.x * angle.cos() + point.y * angle.sin()),
+        y: self.y + (-point.x * angle.sin() - point.y * angle.cos()),
       }
     } else {
       Point {
@@ -87,7 +90,7 @@ impl From<(f64, f64)> for Point {
 }
 
 /// Coordinate point for use in point lists
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Point {
   /// X coordinate in millimeters
@@ -99,6 +102,25 @@ pub struct Point {
 impl Point {
   pub fn as_tuple(&self) -> (f64, f64) {
     (self.x, self.y)
+  }
+
+  pub fn new(x: f64, y: f64) -> Self {
+    Point { x, y }
+  }
+}
+
+impl Add for Point {
+  type Output = Point;
+
+  fn add(self, rhs: Self) -> Self::Output {
+    Point::new(self.x + rhs.x, self.y + rhs.y)
+  }
+}
+
+impl AddAssign for Point {
+  fn add_assign(&mut self, rhs: Self) {
+    self.x += rhs.x;
+    self.y += rhs.y;
   }
 }
 
@@ -183,6 +205,29 @@ impl BoundingBox {
       (self.min_x + self.max_x) / 2.,
       (self.min_y + self.max_y) / 2.,
     )
+  }
+
+  pub fn add_point(&mut self, point: &Point) {
+    if point.x < self.min_x {
+      self.min_x = point.x;
+    }
+    if point.y < self.min_y {
+      self.min_y = point.y;
+    }
+    if point.x > self.max_x {
+      self.max_x = point.x;
+    }
+    if point.y > self.max_y {
+      self.max_y = point.y;
+    }
+  }
+
+  pub fn from_points(points: &[Point]) -> Self {
+    let mut result = BoundingBox::default();
+    for p in points {
+      result.add_point(p);
+    }
+    result
   }
 
   pub fn envelop(&mut self, other: &Self) {

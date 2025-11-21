@@ -26,11 +26,13 @@ pub fn main() {
   println!("PCB Bounding Box: {w}x{h}");
 
   for footprint in pcb.footprints {
-    if footprint.properties.get("Value") != Some(&"Fiducial".to_string()) {
+    if footprint.properties.get("Value") == Some(&"Fiducial".to_string()) {
       continue;
     }
 
     let bounding = footprint.bounding_box();
-    println!("Footprint bounding: {bounding}");
+    let position = footprint.position.unwrap();
+    let name = footprint.properties.get("Value");
+    println!("Footprint bounding: {bounding} {position:?} {name:?}");
   }
 }
