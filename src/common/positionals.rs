@@ -138,10 +138,26 @@ impl TryFrom<SExpr> for Point {
     Ok(Point { x, y })
   }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub enum PointItem {
+  Point(Point),
+  Arc(Arc),
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct Arc {
+  pub start: Point,
+  pub mid: Point,
+  pub end: Point,
+}
+
 /// Coordinate point for use in point lists
 #[derive(Default, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct PointList(pub Vec<Point>);
+pub struct PointList(pub Vec<PointItem>);
 
 impl TryFrom<SExpr> for PointList {
   type Error = ParserError;
@@ -151,10 +167,31 @@ impl TryFrom<SExpr> for PointList {
     crate::expect_eq!(list.next_symbol()?, "pts", "Point::try_from");
 
     let mut out = PointList::default();
-    while let Some(pt) = list.next_maybe_list()? {
-      crate::expect_eq!(pt.peek_name()?, "xy", "PointList::try_from");
-      let pt: Point = pt.as_sexpr_into()?;
-      out.0.push(pt);
+    while let Some(mut pt) = list.next_maybe_list()? {
+      match pt.peek_name()? {
+        "xy" => {
+          let pt: Point = pt.as_sexpr_into()?;
+          out.0.push(PointItem::Point(pt));
+        }
+        "arc" => {
+          let mut list = pt.next_list()?;
+          let mut arc = Arc::default();
+          while let Some(list) = list.next_maybe() {
+            match list {
+              SExpr::List(attr) => match attr.peek_name()? {
+                "start" => arc.start = attr.as_sexpr_into()?,
+                "mid" => arc.mid = attr.as_sexpr_into()?,
+                "end" => arc.end = attr.as_sexpr_into()?,
+
+                name => crate::catch_all!(name),
+              },
+              name => crate::catch_all!(name),
+            }
+          }
+          out.0.push(PointItem::Arc(arc));
+        }
+        name => crate::catch_all!(name),
+      }
     }
 
     Ok(out)
