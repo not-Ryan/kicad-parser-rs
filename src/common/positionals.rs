@@ -41,7 +41,7 @@ impl Position {
       let angle = angle.to_radians();
       Point {
         x: point.x * angle.cos() + point.y * angle.sin(),
-        y: -point.x * angle.sin() - point.y * angle.cos(),
+        y: point.x * angle.sin() - point.y * angle.cos(),
       }
     } else {
       point
