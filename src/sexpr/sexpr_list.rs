@@ -148,7 +148,7 @@ impl SExprList {
   ///
   /// # Example
   ///
-  /// ```rust
+  /// ```ignore
   /// while let Ok(net) = sexpr_list.next_into::<PCBNet>() {
   ///     // process net
   /// }

@@ -89,7 +89,11 @@ impl TryFrom<SExpr> for Uuid {
 /// Canonical layer names
 #[derive(Default, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct Layer(pub String);
+pub struct Layer {
+  pub layer_name: String,
+  /// Inverts bbox outline with content outline
+  pub knockout: bool,
+}
 
 impl TryFrom<SExpr> for Layer {
   type Error = ParserError;
@@ -99,9 +103,28 @@ impl TryFrom<SExpr> for Layer {
     crate::expect_eq!(list.next_symbol()?, "layer", "Layer::try_from");
 
     let value: SExprValue = list.next_into()?;
+
+    let mut knockout = false;
+    if let Ok(layer_attrib) = list.next_symbol()
+      && layer_attrib.as_str() == "knockout"
+    {
+      knockout = true;
+    }
     list.expect_end()?;
 
-    Ok(Self(value.to_string()))
+    Ok(Self {
+      layer_name: value.to_string(),
+      knockout,
+    })
+  }
+}
+
+impl From<&str> for Layer {
+  fn from(value: &str) -> Self {
+    Layer {
+      layer_name: value.to_string(),
+      knockout: false,
+    }
   }
 }
 
@@ -114,7 +137,10 @@ impl TryFrom<SExpr> for Vec<Layer> {
 
     let mut out = Self::new();
     while let Some(value) = list.next_maybe_into::<SExprValue>()? {
-      out.push(Layer(value.to_string()));
+      out.push(Layer {
+        layer_name: value.to_string(),
+        knockout: false,
+      });
     }
 
     Ok(out)
@@ -123,7 +149,7 @@ impl TryFrom<SExpr> for Vec<Layer> {
 
 impl PartialEq<str> for Layer {
   fn eq(&self, other: &str) -> bool {
-    self.0 == other
+    self.layer_name == other
   }
 }
 

@@ -46,7 +46,7 @@ pub fn main() {
     for pad in footprint.pads.iter() {
       let pad_pos = anchor.transform_position(&pad.position);
 
-      if pad.layers.contains(&Layer("F.Cu".to_string())) {
+      if pad.layers.contains(&"F.Cu".into()) {
         let rel_start = pad_pos.transform_angle(pad.size);
         let pad_bounds = Data::new()
           .move_to((pad_pos.x - rel_start.x / 2., pad_pos.y - rel_start.y / 2.))

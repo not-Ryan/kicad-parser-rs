@@ -1,6 +1,6 @@
 use std::fs;
 
-const CONTENT: &str = include_str!("./board.kicad_pcb");
+const CONTENT: &str = include_str!("./MainBoard.kicad_pcb");
 
 #[test]
 pub fn sexpr() {
@@ -15,7 +15,7 @@ pub fn sexpr() {
 
 #[test]
 pub fn pcb_file() {
-  use kicad_parser::pcb::parse_pcb_file;
+  use kicad_parser::pcb_file::parse_pcb_file;
   parse_pcb_file(CONTENT).unwrap();
   assert!(
     parse_pcb_file(CONTENT).is_ok(),
