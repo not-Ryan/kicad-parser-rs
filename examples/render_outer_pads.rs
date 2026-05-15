@@ -47,13 +47,16 @@ pub fn main() {
   let board_center_x = (bounding.max_x + bounding.min_x) / 2.;
 
   // NOTE: this is the bottom as viewed when canonical view is flipped
-  let layer = args.layer.as_str().into();
+  let layer: Layer = args.layer.as_str().into();
   for footprint in pcb.footprints.iter() {
-    let anchor = footprint
+    let mut anchor = footprint
       .position
       .clone()
-      .expect("Footprint without position?")
-      .mirror_around_x(board_center_x);
+      .expect("Footprint without position?");
+
+    if layer.is_back() {
+      anchor = anchor.mirror_around_x(board_center_x);
+    }
 
     let mut group = Group::new();
     let mut bb = BoundingBox::default();
