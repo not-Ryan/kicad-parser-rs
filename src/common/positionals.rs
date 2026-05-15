@@ -233,22 +233,41 @@ fn normalize_angle(angle: f64) -> f64 {
 ///
 /// All input angles are in [0, 2π). The returned `angle_end` may be larger than 2π if
 /// the interval wraps around.
+/// Given the start, end, and mid angles (all normalized to [0, 2π)),
+/// returns the continuous CCW angular interval [a, b] that represents
+/// the actual arc. The returned `b` may exceed 2π if the interval wraps.
+/// Returns the continuous CCW angular interval [a, b] that represents the arc.
+/// `b` may be > 2π if the interval wraps.
 fn get_arc_interval(start_angle: f64, end_angle: f64, mid_angle: f64) -> (f64, f64) {
   let two_pi = 2.0 * std::f64::consts::PI;
 
-  let diff_ccw = if end_angle >= start_angle {
+  // Degenerate case: start and end coincide → treat as full circle
+  if (start_angle - end_angle).abs() < 1e-12 {
+    return (0.0, two_pi);
+  }
+
+  // CCW distance from start to end
+  let ccw_dist = if end_angle >= start_angle {
     end_angle - start_angle
   } else {
     end_angle + two_pi - start_angle
   };
 
-  if diff_ccw <= std::f64::consts::PI {
-    // The arc goes CCW from start to end; the smaller arc is this one.
-    // Build a continuous interval: [start_angle, start_angle + diff_ccw]
-    (start_angle, start_angle + diff_ccw)
+  // Shift mid so it lies in the same continuous range as [start, start+ccw_dist)
+  let mid_shifted = if mid_angle >= start_angle {
+    mid_angle
   } else {
-    // The arc goes CW from start to end; the smaller arc is the complement,
-    // which is CCW from end to start.
+    mid_angle + two_pi
+  };
+
+  // Does mid lie on the CCW path from start to end?
+  let mid_on_ccw = mid_shifted < start_angle + ccw_dist;
+
+  if mid_on_ccw {
+    // Arc is the minor (or at least the CCW) arc from start to end
+    (start_angle, start_angle + ccw_dist)
+  } else {
+    // Arc is the major (CW) arc → equivalent to CCW from end to start + 2π
     (end_angle, start_angle + two_pi)
   }
 }

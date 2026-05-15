@@ -723,28 +723,6 @@ impl TryFrom<SExpr> for FootprintCurve {
 
 impl GetBoundingBox for FootprintCurve {
   fn bounding_box(&self) -> BoundingBox {
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-
-    for point in &self.points.0 {
-      match point {
-        super::PointItem::Point(point) => {
-          min_x = min_x.min(point.x);
-          min_y = min_y.min(point.y);
-          max_x = max_x.max(point.x);
-          max_y = max_y.max(point.y);
-        }
-        super::PointItem::Arc(arc) => todo!(),
-      }
-    }
-
-    BoundingBox {
-      min_x,
-      min_y,
-      max_x,
-      max_y,
-    }
+    todo!("Bazier curves not implemented yet")
   }
 }
