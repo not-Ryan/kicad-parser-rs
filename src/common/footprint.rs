@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-  common::{GetBoundingBox, Graphic, Point, Position},
+  common::{BoundingBox, FootprintPolygon, GetBoundingBox, Graphic, Point, PointItem, Position},
   parser::ParserError,
   sexpr::{SExpr, SExprValue},
 };
@@ -292,6 +292,28 @@ pub struct Footprint {
   pub models: Vec<Model3D>,
 }
 
+impl Footprint {
+  pub fn pad_bounding_box(&self, layer: &Layer) -> BoundingBox {
+    let mut bbox = BoundingBox::default();
+
+    for pad in &self.pads {
+      // Check if the pad is defined on the requested layer
+      if pad.layers.contains(layer) {
+        bbox.envelop(&pad.bounding_box());
+      }
+    }
+
+    // Apply the footprint's global placement (same logic as in
+    // Footprint::bounding_box())
+    let position = self.position.as_ref();
+    let x = position.map_or(0.0, |p| p.x);
+    let y = position.map_or(0.0, |p| p.y);
+    bbox.move_by(x, y);
+
+    bbox
+  }
+}
+
 impl TryFrom<SExpr> for Footprint {
   type Error = ParserError;
 
@@ -424,7 +446,86 @@ pub struct Pad {
   /// Custom pad options
   pub custom_options: Option<CustomPadOptions>,
   /// Custom pad primitives
-  pub custom_primitives: Option<CustomPadPrimitives>,
+  pub custom_primitives: Vec<FootprintPolygon>,
+}
+
+impl GetBoundingBox for Pad {
+  fn bounding_box(&self) -> BoundingBox {
+    let mut bbox = BoundingBox::default();
+
+    match self.shape {
+      // Simple shapes: bounding box = rectangle of size (w, h)
+      PadShape::Circle
+      | PadShape::Rectangle
+      | PadShape::Oval
+      | PadShape::Trapezoid
+      | PadShape::RoundedRectangle => {
+        let (w, h) = self.size;
+        let half_w = w / 2.0;
+        let half_h = h / 2.0;
+
+        // Corners of the rectangle in local pad coordinates
+        let corners = [
+          (-half_w, -half_h),
+          (half_w, -half_h),
+          (half_w, half_h),
+          (-half_w, half_h),
+        ];
+
+        // Apply rotation and translation
+        let angle = self.position.angle; // in radians (or degrees, adapt rotate function)
+        for (local_x, local_y) in corners.iter() {
+          let rp = Point::new(*local_x, *local_y).rotate(angle.unwrap_or(0.));
+          let px = self.position.x + rp.x;
+          let py = self.position.y + rp.y;
+          bbox.add_point(&Point { x: px, y: py });
+        }
+      }
+
+      // Custom shape: process primitives
+      PadShape::Custom => {
+        let angle = self.position.angle;
+        let pad_anchor = Point::new(self.position.x, self.position.y);
+
+        for prim in &self.custom_primitives {
+          for item in &prim.points.0 {
+            match item {
+              PointItem::Point(pt) => {
+                let rp = Point::new(pt.x, pt.y).rotate(angle.unwrap_or(0.));
+                let mut pt = pad_anchor;
+                pt.x += rp.x;
+                pt.y += rp.y;
+                // Expand by half the stroke width to account for the outer edge
+                let half_stroke = prim.stroke.width / 2.0;
+                bbox.min_x = bbox.min_x.min(pt.x - half_stroke);
+                bbox.min_y = bbox.min_y.min(pt.y - half_stroke);
+                bbox.max_x = bbox.max_x.max(pt.x + half_stroke);
+                bbox.max_y = bbox.max_y.max(pt.y + half_stroke);
+
+                // Add point expanded by half stroke
+              }
+              PointItem::Arc(arc) => {
+                let mut arc_bbox = arc.bounding_box_centerline();
+                let half_stroke = prim.stroke.width / 2.0;
+                arc_bbox.min_x -= half_stroke;
+                arc_bbox.min_y -= half_stroke;
+                arc_bbox.max_x += half_stroke;
+                arc_bbox.max_y += half_stroke;
+                bbox.envelop(&arc_bbox);
+                // Then rotate and translate each corner of arc_bbox (or envelop the bbox directly after rotation)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // For through‑hole pads, the drill hole does not extend the copper pad,
+    // so no additional expansion is needed. The same applies to paste/mask margins;
+    // those only affect the layers' openings, not the physical pad outline.
+
+    bbox
+  }
 }
 
 impl TryFrom<SExpr> for Pad {
@@ -473,6 +574,7 @@ impl TryFrom<SExpr> for Pad {
             attr.discard(1)?; // Discard the "pintype" keyword
             pad.pin_type = Some(attr.next_into()?);
           }
+          "primitives" => pad.custom_primitives = attr.try_into()?,
           name => crate::catch_all!(name),
         },
         name => crate::catch_all!(name),

@@ -104,6 +104,18 @@ impl Point {
     (self.x, self.y)
   }
 
+  /// Returns a new `Point` rotated counter-clockwise around the origin by `angle` (radians).
+  pub fn rotate(&self, angle: f64) -> Point {
+    fn rotate_point(x: f64, y: f64, angle: f64) -> (f64, f64) {
+      let cos_a = angle.cos();
+      let sin_a = angle.sin();
+      (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
+    }
+
+    let (rx, ry) = rotate_point(self.x, self.y, angle);
+    Point { x: rx, y: ry }
+  }
+
   pub fn new(x: f64, y: f64) -> Self {
     Point { x, y }
   }
@@ -152,6 +164,127 @@ pub struct Arc {
   pub start: Point,
   pub mid: Point,
   pub end: Point,
+}
+
+impl Arc {
+  /// Returns the axis-aligned bounding box of the arc's centerline (no stroke width).
+  pub fn bounding_box_centerline(&self) -> BoundingBox {
+    let (cx, cy, r) = circle_from_three_points(&self.start, &self.mid, &self.end);
+    let start_angle = normalize_angle((self.start.y - cy).atan2(self.start.x - cx));
+    let mid_angle = normalize_angle((self.mid.y - cy).atan2(self.mid.x - cx));
+    let end_angle = normalize_angle((self.end.y - cy).atan2(self.end.x - cx));
+
+    let (angle_start, angle_end) = get_arc_interval(start_angle, end_angle, mid_angle);
+
+    let mut bbox = BoundingBox::default();
+    bbox.add_point(&self.start);
+    bbox.add_point(&self.end);
+
+    // Check the four cardinal extremes of a circle
+    let cardinals = [
+      0.0,
+      std::f64::consts::FRAC_PI_2,
+      std::f64::consts::PI,
+      3.0 * std::f64::consts::FRAC_PI_2,
+    ];
+    for &angle in &cardinals {
+      if angle_in_interval(angle, angle_start, angle_end) {
+        let px = cx + r * angle.cos();
+        let py = cy + r * angle.sin();
+        bbox.add_point(&Point { x: px, y: py });
+      }
+    }
+
+    bbox
+  }
+
+  /// Generates `num_points` evenly spaced points along the arc.
+  pub fn sample_points(&self, num_points: usize) -> Vec<Point> {
+    let (cx, cy, r) = circle_from_three_points(&self.start, &self.mid, &self.end);
+    let start_angle = normalize_angle((self.start.y - cy).atan2(self.start.x - cx));
+    let mid_angle = normalize_angle((self.mid.y - cy).atan2(self.mid.x - cx));
+    let end_angle = normalize_angle((self.end.y - cy).atan2(self.end.x - cx));
+    let (angle_start, angle_end) = get_arc_interval(start_angle, end_angle, mid_angle);
+
+    let n = num_points.max(2);
+    (0..n)
+      .map(|i| {
+        let t = angle_start + (i as f64) * (angle_end - angle_start) / ((n - 1) as f64);
+        Point {
+          x: cx + r * t.cos(),
+          y: cy + r * t.sin(),
+        }
+      })
+      .collect()
+  }
+}
+
+// ---------- Helper functions ----------
+
+/// Normalize an angle (in radians) into the range [0, 2π).
+fn normalize_angle(angle: f64) -> f64 {
+  let two_pi = 2.0 * std::f64::consts::PI;
+  let a = angle % two_pi;
+  if a < 0.0 { a + two_pi } else { a }
+}
+
+/// Determine the continuous CCW interval [angle_start, angle_end] that represents the
+/// smaller arc going from `start_angle` to `end_angle` through `mid_angle`.
+///
+/// All input angles are in [0, 2π). The returned `angle_end` may be larger than 2π if
+/// the interval wraps around.
+fn get_arc_interval(start_angle: f64, end_angle: f64, mid_angle: f64) -> (f64, f64) {
+  let two_pi = 2.0 * std::f64::consts::PI;
+
+  let diff_ccw = if end_angle >= start_angle {
+    end_angle - start_angle
+  } else {
+    end_angle + two_pi - start_angle
+  };
+
+  if diff_ccw <= std::f64::consts::PI {
+    // The arc goes CCW from start to end; the smaller arc is this one.
+    // Build a continuous interval: [start_angle, start_angle + diff_ccw]
+    (start_angle, start_angle + diff_ccw)
+  } else {
+    // The arc goes CW from start to end; the smaller arc is the complement,
+    // which is CCW from end to start.
+    (end_angle, start_angle + two_pi)
+  }
+}
+
+/// Returns true if `angle` (in [0, 2π)) lies within the interval `[angle_start, angle_end]`,
+/// where `angle_start < angle_end` and `angle_end` may exceed 2π if the interval wraps.
+fn angle_in_interval(angle: f64, angle_start: f64, angle_end: f64) -> bool {
+  let two_pi = 2.0 * std::f64::consts::PI;
+  if angle_end > two_pi {
+    angle >= angle_start || angle <= angle_end - two_pi
+  } else {
+    angle >= angle_start && angle <= angle_end
+  }
+}
+
+/// Computes the center `(cx, cy)` and radius `r` of the unique circle passing through
+/// three non‑collinear points.
+///
+/// Uses the determinant formula for the circumcenter. Returns `(0.0, 0.0, 0.0)` if the
+/// points are collinear (which should never happen for a valid arc).
+fn circle_from_three_points(p1: &Point, p2: &Point, p3: &Point) -> (f64, f64, f64) {
+  let d = 2.0 * (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y));
+  if d.abs() < 1e-12 {
+    // Points are collinear – fall back gracefully (theoretical arc cannot exist)
+    return (0.0, 0.0, 0.0);
+  }
+
+  let p1_sq = p1.x.powi(2) + p1.y.powi(2);
+  let p2_sq = p2.x.powi(2) + p2.y.powi(2);
+  let p3_sq = p3.x.powi(2) + p3.y.powi(2);
+
+  let cx = (p1_sq * (p2.y - p3.y) + p2_sq * (p3.y - p1.y) + p3_sq * (p1.y - p2.y)) / d;
+  let cy = (p1_sq * (p3.x - p2.x) + p2_sq * (p1.x - p3.x) + p3_sq * (p2.x - p1.x)) / d;
+  let r = ((p1.x - cx).powi(2) + (p1.y - cy).powi(2)).sqrt();
+
+  (cx, cy, r)
 }
 
 /// Coordinate point for use in point lists

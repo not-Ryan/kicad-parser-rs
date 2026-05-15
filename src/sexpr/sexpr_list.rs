@@ -6,6 +6,19 @@ use super::SExpr;
 pub struct SExprList(pub Vec<SExpr>);
 impl_from_into!(SExprList, SExpr::List);
 
+impl<T: TryFrom<SExpr, Error = ParserError>> TryFrom<SExprList> for Vec<T> {
+  type Error = ParserError;
+
+  fn try_from(mut value: SExprList) -> Result<Self, Self::Error> {
+    let mut output = Vec::new();
+    while let Some(subexpr) = value.next_maybe() {
+      output.push(subexpr.try_into()?);
+    }
+
+    Ok(output)
+  }
+}
+
 impl SExprList {
   pub fn as_sexpr(self) -> SExpr {
     SExpr::List(self)

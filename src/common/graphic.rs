@@ -610,7 +610,7 @@ pub struct FootprintPolygon {
   /// Unique identifier
   pub uuid: Uuid,
   /// Width of the polygon stroke (prior to version 7)
-  pub width: f32,
+  pub width: f64,
 }
 
 impl TryFrom<SExpr> for FootprintPolygon {
@@ -645,29 +645,32 @@ impl TryFrom<SExpr> for FootprintPolygon {
 
 impl GetBoundingBox for FootprintPolygon {
   fn bounding_box(&self) -> BoundingBox {
-    let mut min_x = f64::INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-
-    for point in &self.points.0 {
-      match point {
-        super::PointItem::Point(point) => {
-          min_x = min_x.min(point.x);
-          min_y = min_y.min(point.y);
-          max_x = max_x.max(point.x);
-          max_y = max_y.max(point.y);
-        }
-        super::PointItem::Arc(arc) => todo!(),
-      }
-    }
-
-    BoundingBox {
+    let min_x = f64::INFINITY;
+    let min_y = f64::INFINITY;
+    let max_x = f64::NEG_INFINITY;
+    let max_y = f64::NEG_INFINITY;
+    let mut base_box = BoundingBox {
       min_x,
       min_y,
       max_x,
       max_y,
+    };
+
+    let stroke = self.stroke.width.max(self.width) / 2.;
+
+    for point in &self.points.0 {
+      let line_bbox = match point {
+        super::PointItem::Point(point) => BoundingBox {
+          min_x: point.x - stroke,
+          min_y: point.y - stroke,
+          max_x: point.x + stroke,
+          max_y: point.y + stroke,
+        },
+        super::PointItem::Arc(arc) => arc.bounding_box_centerline(),
+      };
+      base_box.envelop(&line_bbox);
     }
+    base_box
   }
 }
 
