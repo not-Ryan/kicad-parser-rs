@@ -7,6 +7,7 @@ publish =  ["devd"]
 [dependencies]
 anyhow = "1.0.98"
 backtrace = "0.3.75"
+log = "0.4.29"
 nom = "8.0.0"
 nom-language = "0.1.0"
 

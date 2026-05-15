@@ -1,6 +1,6 @@
 use std::{
   fmt::Display,
-  ops::{Add, AddAssign},
+  ops::{Add, AddAssign, Div},
 };
 
 use crate::{parser::ParserError, sexpr::SExpr};
@@ -18,6 +18,14 @@ pub struct Position {
 }
 
 impl Position {
+  pub fn mirror_around_x(&self, x: f64) -> Position {
+    Self {
+      x: self.x + (x - self.x) * 2.,
+      y: self.y,
+      angle: self.angle,
+    }
+  }
+
   pub fn transform_position(&self, sub_pos: &Position) -> Position {
     if let Some(angle) = self.angle {
       let angle = angle.to_radians();
@@ -54,7 +62,7 @@ impl Position {
       let angle = angle.to_radians();
       Point {
         x: self.x + (point.x * angle.cos() + point.y * angle.sin()),
-        y: self.y + (-point.x * angle.sin() - point.y * angle.cos()),
+        y: self.y + (-point.x * angle.sin() + point.y * angle.cos()),
       }
     } else {
       Point {
@@ -99,6 +107,13 @@ pub struct Point {
   pub y: f64,
 }
 
+fn rotate_point(x: f64, y: f64, angle: f64) -> (f64, f64) {
+  let angle = angle.to_radians();
+  let cos_a = angle.cos();
+  let sin_a = angle.sin();
+  (x * cos_a + y * sin_a, x * sin_a - y * cos_a)
+}
+
 impl Point {
   pub fn as_tuple(&self) -> (f64, f64) {
     (self.x, self.y)
@@ -106,12 +121,6 @@ impl Point {
 
   /// Returns a new `Point` rotated counter-clockwise around the origin by `angle` (radians).
   pub fn rotate(&self, angle: f64) -> Point {
-    fn rotate_point(x: f64, y: f64, angle: f64) -> (f64, f64) {
-      let cos_a = angle.cos();
-      let sin_a = angle.sin();
-      (x * cos_a - y * sin_a, x * sin_a + y * cos_a)
-    }
-
     let (rx, ry) = rotate_point(self.x, self.y, angle);
     Point { x: rx, y: ry }
   }
@@ -133,6 +142,14 @@ impl AddAssign for Point {
   fn add_assign(&mut self, rhs: Self) {
     self.x += rhs.x;
     self.y += rhs.y;
+  }
+}
+
+impl Div<f64> for Point {
+  type Output = Point;
+
+  fn div(self, rhs: f64) -> Self::Output {
+    Point::new(self.x / rhs, self.y / rhs)
   }
 }
 
@@ -376,6 +393,36 @@ impl Default for BoundingBox {
 }
 
 impl BoundingBox {
+  // NOTE: this does not work for board flipping as that is done the anchor rotation
+  pub fn mirror_x_around(&self, center_x: f64) -> Self {
+    let min_dist = center_x - self.max_x;
+    let max_dist = center_x - self.min_x;
+    BoundingBox {
+      min_x: center_x + max_dist.min(min_dist),
+      min_y: self.min_y,
+      max_x: center_x + min_dist.max(max_dist),
+      max_y: self.max_y,
+    }
+  }
+
+  pub fn translate(&self, pos: Position) -> Self {
+    // TODO: this should probably return an angle bounding box
+    let corners = [
+      Point::new(self.min_x, self.min_y),
+      Point::new(self.min_x, self.max_y),
+      Point::new(self.max_x, self.min_y),
+      Point::new(self.max_x, self.max_y),
+    ];
+
+    let mut bbox = BoundingBox::default();
+    let corners = corners.map(|v| pos.transform_point(v));
+    for p in corners.iter() {
+      bbox.add_point(p);
+    }
+
+    bbox
+  }
+
   pub fn x(&self) -> f64 {
     self.min_x
   }

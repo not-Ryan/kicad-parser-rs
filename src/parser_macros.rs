@@ -33,6 +33,6 @@ macro_rules! expect_eq {
 #[macro_export]
 macro_rules! catch_all {
   ($name: expr) => {
-    println!("Unaccounted sexpr in {}:{}: {:?}", file!(), line!(), $name)
+    log::debug!("Unaccounted sexpr in {}:{}: {:?}", file!(), line!(), $name)
   };
 }

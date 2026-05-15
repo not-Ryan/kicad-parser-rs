@@ -1,5 +1,5 @@
 use crate::{
-  common::{BoundingBox, GetBoundingBox, Layer, Point, PointList, Position, Uuid},
+  common::{BoundingBox, GetBoundingBox, Layer, Point, PointItem, PointList, Position, Uuid},
   parser::ParserError,
   sexpr::SExpr,
 };
@@ -645,32 +645,14 @@ impl TryFrom<SExpr> for FootprintPolygon {
 
 impl GetBoundingBox for FootprintPolygon {
   fn bounding_box(&self) -> BoundingBox {
-    let min_x = f64::INFINITY;
-    let min_y = f64::INFINITY;
-    let max_x = f64::NEG_INFINITY;
-    let max_y = f64::NEG_INFINITY;
-    let mut base_box = BoundingBox {
-      min_x,
-      min_y,
-      max_x,
-      max_y,
-    };
-
-    let stroke = self.stroke.width.max(self.width) / 2.;
-
-    for point in &self.points.0 {
-      let line_bbox = match point {
-        super::PointItem::Point(point) => BoundingBox {
-          min_x: point.x - stroke,
-          min_y: point.y - stroke,
-          max_x: point.x + stroke,
-          max_y: point.y + stroke,
-        },
-        super::PointItem::Arc(arc) => arc.bounding_box_centerline(),
-      };
-      base_box.envelop(&line_bbox);
+    let mut bbox = BoundingBox::default();
+    for item in &self.points.0 {
+      match item {
+        PointItem::Point(p) => bbox.add_point(p),
+        PointItem::Arc(arc) => bbox.envelop(&arc.bounding_box_centerline()),
+      }
     }
-    base_box
+    bbox
   }
 }
 

@@ -95,6 +95,12 @@ pub struct Layer {
   pub knockout: bool,
 }
 
+impl Layer {
+  pub fn is_back(&self) -> bool {
+    self.layer_name.starts_with("B.")
+  }
+}
+
 impl TryFrom<SExpr> for Layer {
   type Error = ParserError;
 
@@ -449,6 +455,66 @@ pub struct Pad {
   pub custom_primitives: Vec<FootprintPolygon>,
 }
 
+impl Pad {
+  pub fn translate(&self, position: &Position, mirror_local_x: bool) -> Self {
+    let mut target = self.clone();
+    if mirror_local_x {
+      target.position.y = -target.position.y;
+    }
+    target.position = position.transform_position(&target.position);
+    target
+  }
+
+  pub fn bounding_box_on_layer(&self, layer: &Layer) -> BoundingBox {
+    let mut bbox = BoundingBox::default();
+    let angle = self.position.angle.unwrap_or(0.0);
+    let flip = if layer.is_back() { -1.0 } else { 1.0 };
+    let anchor = Point {
+      x: self.position.x,
+      y: self.position.y,
+    };
+
+    // Transforms a local pad coordinate to world (board) coordinate
+    let to_world = |lx, ly| {
+      let pt = Point::new(lx * flip, ly).rotate(-angle);
+      anchor + pt
+    };
+
+    match self.shape {
+      // Simple shapes: add rotated rectangle corners
+      PadShape::Circle
+      | PadShape::Rectangle
+      | PadShape::Oval
+      | PadShape::Trapezoid
+      | PadShape::RoundedRectangle => {
+        let (w, h) = self.size;
+        let (hw, hh) = (w / 2.0, h / 2.0);
+        for (lx, ly) in &[(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)] {
+          bbox.add_point(&to_world(*lx, *ly));
+        }
+      }
+
+      // Custom shape: process primitives, stroked
+      PadShape::Custom => {
+        for prim in &self.custom_primitives {
+          let cb = prim.bounding_box();
+          let s = prim.stroke.width / 2.0; // half stroke
+          let corners = [
+            (cb.min_x - s, cb.min_y - s),
+            (cb.max_x + s, cb.min_y - s),
+            (cb.max_x + s, cb.max_y + s),
+            (cb.min_x - s, cb.max_y + s),
+          ];
+          for (lx, ly) in &corners {
+            bbox.add_point(&to_world(*lx, *ly));
+          }
+        }
+      }
+    }
+    bbox
+  }
+}
+
 impl GetBoundingBox for Pad {
   fn bounding_box(&self) -> BoundingBox {
     let mut bbox = BoundingBox::default();
@@ -475,7 +541,7 @@ impl GetBoundingBox for Pad {
         // Apply rotation and translation
         let angle = self.position.angle; // in radians (or degrees, adapt rotate function)
         for (local_x, local_y) in corners.iter() {
-          let rp = Point::new(*local_x, *local_y).rotate(angle.unwrap_or(0.));
+          let rp = Point::new(*local_x, *local_y).rotate(-angle.unwrap_or(0.));
           let px = self.position.x + rp.x;
           let py = self.position.y + rp.y;
           bbox.add_point(&Point { x: px, y: py });
@@ -491,7 +557,7 @@ impl GetBoundingBox for Pad {
           for item in &prim.points.0 {
             match item {
               PointItem::Point(pt) => {
-                let rp = Point::new(pt.x, pt.y).rotate(angle.unwrap_or(0.));
+                let rp = Point::new(pt.x, pt.y).rotate(-angle.unwrap_or(0.));
                 let mut pt = pad_anchor;
                 pt.x += rp.x;
                 pt.y += rp.y;
@@ -574,7 +640,10 @@ impl TryFrom<SExpr> for Pad {
             attr.discard(1)?; // Discard the "pintype" keyword
             pad.pin_type = Some(attr.next_into()?);
           }
-          "primitives" => pad.custom_primitives = attr.try_into()?,
+          "primitives" => {
+            attr.discard(1)?; // Discard the "pintype" keyword
+            pad.custom_primitives = attr.try_into()?
+          }
           name => crate::catch_all!(name),
         },
         name => crate::catch_all!(name),
